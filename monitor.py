@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-XRPL Issuer / Trustline Scanner (v0.2)
+XRPL Issuer / Trustline Scanner
 
 Scans trust lines for a given issuer account on XRPL and aggregates by currency.
 
@@ -13,12 +13,15 @@ Features:
 - retry + simple rate limiting
 - max-pages for large issuers
 - progress logging
+- min-trustlines filter
+- top-N output
 
 Examples:
     python3 monitor.py scan --issuer rEXAMPLE...
     python3 monitor.py scan --issuer rEXAMPLE... --format json --out results.json
     python3 monitor.py scan --issuer rEXAMPLE... --format csv --out results.csv
     python3 monitor.py scan --issuer rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq --max-pages 3
+    python3 monitor.py scan --issuer rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq --min-trustlines 50 --top 10
 """
 
 from __future__ import annotations
@@ -210,6 +213,19 @@ def sort_results(rows: List[AssetStats], sort_by: str) -> List[AssetStats]:
     return rows
 
 
+def filter_results(
+    rows: List[AssetStats],
+    min_trustlines: int,
+    top: Optional[int],
+) -> List[AssetStats]:
+    filtered = [row for row in rows if row.trustlines_count >= min_trustlines]
+
+    if top is not None:
+        filtered = filtered[:top]
+
+    return filtered
+
+
 def print_table(rows: List[AssetStats]) -> None:
     if not rows:
         print("No results.")
@@ -269,7 +285,7 @@ def write_csv(rows: List[AssetStats], out_path: Optional[str]) -> None:
 
 def run_scan(args: argparse.Namespace) -> int:
     if not args.issuer:
-        eprint("[error] v0.2 requires --issuer")
+        eprint("[error] requires --issuer")
         return 2
 
     if args.limit <= 0:
@@ -278,6 +294,14 @@ def run_scan(args: argparse.Namespace) -> int:
 
     if args.max_pages is not None and args.max_pages <= 0:
         eprint("[error] --max-pages must be > 0")
+        return 2
+
+    if args.min_trustlines < 0:
+        eprint("[error] --min-trustlines must be >= 0")
+        return 2
+
+    if args.top is not None and args.top <= 0:
+        eprint("[error] --top must be > 0")
         return 2
 
     if args.limit > MAX_LIMIT:
@@ -291,6 +315,10 @@ def run_scan(args: argparse.Namespace) -> int:
     eprint(f"[info] limit={args.limit}")
     if args.max_pages:
         eprint(f"[info] max_pages={args.max_pages}")
+    if args.min_trustlines:
+        eprint(f"[info] min_trustlines={args.min_trustlines}")
+    if args.top:
+        eprint(f"[info] top={args.top}")
     eprint("[info] fetching trust lines...")
 
     try:
@@ -311,6 +339,7 @@ def run_scan(args: argparse.Namespace) -> int:
 
     rows = aggregate_lines(args.issuer, lines)
     rows = sort_results(rows, args.sort)
+    rows = filter_results(rows, args.min_trustlines, args.top)
 
     if args.format == "table":
         print_table(rows)
@@ -335,7 +364,7 @@ def run_scan(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="monitor.py",
-        description="XRPL Issuer / Trustline Scanner (v0.2)",
+        description="XRPL Issuer / Trustline Scanner",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -371,6 +400,18 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Stop after this many pages (useful for very large issuers)",
+    )
+    scan.add_argument(
+        "--min-trustlines",
+        type=int,
+        default=0,
+        help="Only include assets with at least this many trustlines",
+    )
+    scan.add_argument(
+        "--top",
+        type=int,
+        default=None,
+        help="Only show the top N results after sorting/filtering",
     )
     scan.add_argument(
         "--format",
