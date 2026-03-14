@@ -19,3 +19,8 @@ It aggregates trust lines by **issuer + currency** and outputs:
 
 ```bash
 pip install -r requirements.txt
+### Run a scan
+
+```bash
+python3 monitor.py scan --issuer rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh
+### Replace the issuer address with any valid XRPL issuer account.
