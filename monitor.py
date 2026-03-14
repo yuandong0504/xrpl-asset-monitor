@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-XRPL Issuer / Trustline Scanner (v0.1)
+XRPL Issuer / Trustline Scanner (v0.2)
 
 Scans trust lines for a given issuer account on XRPL and aggregates by currency.
 
@@ -9,12 +9,16 @@ Features:
 - aggregate by issuer/currency
 - trustlines count
 - unique holders
-- CSV / JSON output
+- CSV / JSON / table output
 - retry + simple rate limiting
+- max-pages for large issuers
+- progress logging
 
-Example:
-    python monitor.py scan --issuer rEXAMPLE... --limit 200 --output json
-    python monitor.py scan --issuer rEXAMPLE... --limit 500 --format csv --out results.csv
+Examples:
+    python3 monitor.py scan --issuer rEXAMPLE...
+    python3 monitor.py scan --issuer rEXAMPLE... --format json --out results.json
+    python3 monitor.py scan --issuer rEXAMPLE... --format csv --out results.csv
+    python3 monitor.py scan --issuer rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq --max-pages 3
 """
 
 from __future__ import annotations
@@ -30,10 +34,9 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from xrpl.clients import JsonRpcClient
 from xrpl.models.requests import AccountLines
 
-
 DEFAULT_RPC_URL = "https://s1.ripple.com:51234/"
 DEFAULT_LIMIT = 200
-MAX_LIMIT = 400  # safer upper bound for public servers
+MAX_LIMIT = 400
 DEFAULT_RATE_LIMIT_SECONDS = 0.35
 DEFAULT_RETRIES = 3
 DEFAULT_RETRY_BACKOFF = 1.5
@@ -61,13 +64,6 @@ def is_hex_currency(code: str) -> bool:
 
 
 def normalize_currency(code: str) -> str:
-    """
-    XRPL currency codes can be:
-    - 3-char standard codes (e.g. USD)
-    - 160-bit hex currency codes (40 hex chars)
-
-    For hex currency codes, keep raw if decode is not clean.
-    """
     if not is_hex_currency(code):
         return code
 
@@ -124,14 +120,15 @@ def fetch_account_lines(
     retries: int,
     backoff: float,
     rate_limit_seconds: float,
+    max_pages: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """
-    Fetch all trust lines for a given issuer using pagination via marker.
-    """
     marker: Optional[Any] = None
     all_lines: List[Dict[str, Any]] = []
+    page = 0
 
     while True:
+        page += 1
+
         req = AccountLines(
             account=issuer,
             ledger_index="validated",
@@ -150,7 +147,14 @@ def fetch_account_lines(
         lines = result.get("lines", [])
         all_lines.extend(lines)
 
+        eprint(f"[info] page {page}: fetched {len(lines)} lines (total {len(all_lines)})")
+
         marker = result.get("marker")
+
+        if max_pages is not None and page >= max_pages:
+            eprint(f"[info] reached max_pages={max_pages}, stopping early")
+            break
+
         if not marker:
             break
 
@@ -164,8 +168,6 @@ def aggregate_lines(issuer: str, lines: List[Dict[str, Any]]) -> List[AssetStats
     for line in lines:
         currency_raw = line.get("currency", "UNKNOWN")
         currency = normalize_currency(currency_raw)
-
-        # For account_lines on issuer account, each line's "account" is the counterparty holder.
         holder = line.get("account", "")
 
         key = (issuer, currency)
@@ -267,11 +269,15 @@ def write_csv(rows: List[AssetStats], out_path: Optional[str]) -> None:
 
 def run_scan(args: argparse.Namespace) -> int:
     if not args.issuer:
-        eprint("[error] v0.1 requires --issuer")
+        eprint("[error] v0.2 requires --issuer")
         return 2
 
     if args.limit <= 0:
         eprint("[error] --limit must be > 0")
+        return 2
+
+    if args.max_pages is not None and args.max_pages <= 0:
+        eprint("[error] --max-pages must be > 0")
         return 2
 
     if args.limit > MAX_LIMIT:
@@ -283,6 +289,8 @@ def run_scan(args: argparse.Namespace) -> int:
     eprint(f"[info] rpc_url={args.rpc_url}")
     eprint(f"[info] issuer={args.issuer}")
     eprint(f"[info] limit={args.limit}")
+    if args.max_pages:
+        eprint(f"[info] max_pages={args.max_pages}")
     eprint("[info] fetching trust lines...")
 
     try:
@@ -293,12 +301,13 @@ def run_scan(args: argparse.Namespace) -> int:
             retries=args.retries,
             backoff=args.retry_backoff,
             rate_limit_seconds=args.rate_limit,
+            max_pages=args.max_pages,
         )
     except Exception as exc:
         eprint(f"[error] failed to fetch account lines: {exc}")
         return 1
 
-    eprint(f"[info] fetched {len(lines)} trust lines")
+    eprint(f"[info] fetched {len(lines)} trust lines total")
 
     rows = aggregate_lines(args.issuer, lines)
     rows = sort_results(rows, args.sort)
@@ -326,7 +335,7 @@ def run_scan(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="monitor.py",
-        description="XRPL Issuer / Trustline Scanner (v0.1)",
+        description="XRPL Issuer / Trustline Scanner (v0.2)",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -338,12 +347,12 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument(
         "--issuer",
         type=str,
-        help="Issuer account address (required in v0.1)",
+        help="Issuer account address (required)",
     )
     scan.add_argument(
         "--issuer-only",
         action="store_true",
-        help="Accepted for compatibility; v0.1 already operates in issuer-only mode",
+        help="Accepted for compatibility; scanner already operates in issuer-only mode",
     )
     scan.add_argument(
         "--sort",
@@ -356,6 +365,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_LIMIT,
         help=f"Page size per request (default: {DEFAULT_LIMIT})",
+    )
+    scan.add_argument(
+        "--max-pages",
+        type=int,
+        default=None,
+        help="Stop after this many pages (useful for very large issuers)",
     )
     scan.add_argument(
         "--format",
