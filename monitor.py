@@ -1,14 +1,7 @@
 #!/usr/bin/env python3
 """
-XRPL Issuer / Trustline Scanner v0.3
-
-Commands:
-- scan: scan trust-line assets for a single issuer
-- scan-network: discover issuers from RippleState objects via ledger_data
-- top-assets: show top assets by trustlines
-- top-issuers: show top issuers by trustlines
+XRPL Issuer / Trustline Scanner v0.4 (Fixed & Optimized)
 """
-
 from __future__ import annotations
 
 import argparse
@@ -29,7 +22,6 @@ DEFAULT_RATE_LIMIT_SECONDS = 0.35
 DEFAULT_RETRIES = 3
 DEFAULT_RETRY_BACKOFF = 1.5
 
-
 @dataclass
 class AssetStats:
     issuer: str
@@ -37,31 +29,26 @@ class AssetStats:
     trustlines_count: int
     unique_holders: int
 
-
 @dataclass
 class IssuerSummary:
     issuer: str
     trustline_objects: int
     discovered_currencies: int
 
-
 def eprint(*args: Any) -> None:
     print(*args, file=sys.stderr)
-
 
 def sleep_rate_limit(seconds: float) -> None:
     if seconds > 0:
         time.sleep(seconds)
 
-
 def is_hex_currency(code: str) -> bool:
     return len(code) == 40 and all(c in "0123456789ABCDEFabcdef" for c in code)
-
 
 def normalize_currency(code: str) -> str:
     if not is_hex_currency(code):
         return code
-
+    
     try:
         raw = bytes.fromhex(code)
         text = raw.rstrip(b"\x00").decode("ascii", errors="ignore").strip()
@@ -69,10 +56,8 @@ def normalize_currency(code: str) -> str:
     except Exception:
         return code.upper()
 
-
 def make_client(url: str) -> JsonRpcClient:
     return JsonRpcClient(url)
-
 
 def request_with_retry(
     client: JsonRpcClient,
@@ -82,7 +67,7 @@ def request_with_retry(
     rate_limit_seconds: float,
 ) -> Dict[str, Any]:
     last_err: Optional[Exception] = None
-
+    
     for attempt in range(1, retries + 1):
         try:
             sleep_rate_limit(rate_limit_seconds)
@@ -93,7 +78,6 @@ def request_with_retry(
                 raise RuntimeError(
                     f"XRPL error: {result.get('error')} - {result.get('error_message', '')}"
                 )
-
             return result
         except Exception as exc:
             last_err = exc
@@ -104,9 +88,8 @@ def request_with_retry(
                 time.sleep(wait_s)
             else:
                 break
-
+    
     raise RuntimeError(f"request failed after {retries} attempts: {last_err}")
-
 
 def fetch_account_lines(
     client: JsonRpcClient,
@@ -117,20 +100,19 @@ def fetch_account_lines(
     rate_limit_seconds: float,
     max_pages: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    marker: Optional[Any] = None
+    marker: Optional[str] = None
     all_lines: List[Dict[str, Any]] = []
     page = 0
 
     while True:
         page += 1
-
         req = AccountLines(
             account=issuer,
             ledger_index="validated",
             limit=limit,
-            marker=marker,
+            marker=marker
         )
-
+        
         result = request_with_retry(
             client=client,
             request_obj=req,
@@ -138,23 +120,20 @@ def fetch_account_lines(
             backoff=backoff,
             rate_limit_seconds=rate_limit_seconds,
         )
-
+        
         lines = result.get("lines", [])
         all_lines.extend(lines)
-
         eprint(f"[info] page {page}: fetched {len(lines)} lines (total {len(all_lines)})")
 
         marker = result.get("marker")
-
+        
         if max_pages is not None and page >= max_pages:
             eprint(f"[info] reached max_pages={max_pages}, stopping early")
             break
-
         if not marker:
             break
 
     return all_lines
-
 
 def aggregate_lines(issuer: str, lines: List[Dict[str, Any]]) -> List[AssetStats]:
     grouped_holders: Dict[Tuple[str, str], Set[str]] = {}
@@ -167,10 +146,9 @@ def aggregate_lines(issuer: str, lines: List[Dict[str, Any]]) -> List[AssetStats
 
         key = (issuer, currency)
         grouped_counts[key] = grouped_counts.get(key, 0) + 1
-
+        
         if key not in grouped_holders:
             grouped_holders[key] = set()
-
         if holder:
             grouped_holders[key].add(holder)
 
@@ -185,9 +163,7 @@ def aggregate_lines(issuer: str, lines: List[Dict[str, Any]]) -> List[AssetStats
                 unique_holders=len(holders),
             )
         )
-
     return results
-
 
 def sort_asset_results(rows: List[AssetStats], sort_by: str) -> List[AssetStats]:
     if sort_by == "trustlines":
@@ -195,18 +171,14 @@ def sort_asset_results(rows: List[AssetStats], sort_by: str) -> List[AssetStats]
             rows,
             key=lambda x: (-x.trustlines_count, -x.unique_holders, x.currency),
         )
-
     if sort_by == "holders":
         return sorted(
             rows,
             key=lambda x: (-x.unique_holders, -x.trustlines_count, x.currency),
         )
-
     if sort_by == "currency":
         return sorted(rows, key=lambda x: (x.currency, x.issuer))
-
     return rows
-
 
 def filter_asset_results(
     rows: List[AssetStats],
@@ -218,7 +190,6 @@ def filter_asset_results(
         filtered = filtered[:top]
     return filtered
 
-
 def print_asset_table(rows: List[AssetStats]) -> None:
     if not rows:
         print("No results.")
@@ -226,31 +197,28 @@ def print_asset_table(rows: List[AssetStats]) -> None:
 
     headers = ["Issuer Address", "Currency Code", "Trustlines Count", "Unique Holders"]
     widths = [34, 20, 18, 16]
-
+    
     fmt = (
         f"{{:<{widths[0]}}} "
         f"{{:<{widths[1]}}} "
         f"{{:>{widths[2]}}} "
         f"{{:>{widths[3]}}}"
     )
-
+    
     print(fmt.format(*headers))
     print("-" * (sum(widths) + 6))
     for row in rows:
-        print(
-            fmt.format(
-                row.issuer,
-                row.currency,
-                row.trustlines_count,
-                row.unique_holders,
-            )
-        )
-
+        print(fmt.format(
+            row.issuer[:33] + "..." if len(row.issuer) > 33 else row.issuer,
+            row.currency,
+            row.trustlines_count,
+            row.unique_holders,
+        ))
 
 def write_asset_json(rows: List[AssetStats], out_path: Optional[str]) -> None:
     data = [asdict(r) for r in rows]
     text = json.dumps(data, indent=2, ensure_ascii=False)
-
+    
     if out_path:
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(text)
@@ -258,23 +226,16 @@ def write_asset_json(rows: List[AssetStats], out_path: Optional[str]) -> None:
     else:
         print(text)
 
-
 def write_asset_csv(rows: List[AssetStats], out_path: Optional[str]) -> None:
     if not out_path:
         raise ValueError("--out is required when --format csv is used")
-
+    
     with open(out_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(
-            ["issuer_address", "currency_code", "trustlines_count", "unique_holders"]
-        )
+        writer.writerow(["issuer_address", "currency_code", "trustlines_count", "unique_holders"])
         for row in rows:
-            writer.writerow(
-                [row.issuer, row.currency, row.trustlines_count, row.unique_holders]
-            )
-
+            writer.writerow([row.issuer, row.currency, row.trustlines_count, row.unique_holders])
     print(f"[ok] wrote CSV to {out_path}")
-
 
 def fetch_ripple_state_issuers(
     client: JsonRpcClient,
@@ -284,22 +245,20 @@ def fetch_ripple_state_issuers(
     rate_limit_seconds: float,
     max_pages: Optional[int] = None,
 ) -> List[IssuerSummary]:
-    marker: Optional[Any] = None
+    marker: Optional[str] = None
     page = 0
-
     issuer_counts: Dict[str, int] = {}
     issuer_currencies: Dict[str, Set[str]] = {}
 
     while True:
         page += 1
-
         req = LedgerData(
             ledger_index="validated",
             limit=limit,
             marker=marker,
             binary=False,
         )
-
+        
         result = request_with_retry(
             client=client,
             request_obj=req,
@@ -307,14 +266,13 @@ def fetch_ripple_state_issuers(
             backoff=backoff,
             rate_limit_seconds=rate_limit_seconds,
         )
-
+        
         state_objects = 0
         for item in result.get("state", []):
             if item.get("LedgerEntryType") != "RippleState":
                 continue
 
             state_objects += 1
-
             low_limit = item.get("LowLimit", {})
             high_limit = item.get("HighLimit", {})
 
@@ -340,7 +298,6 @@ def fetch_ripple_state_issuers(
         if max_pages is not None and page >= max_pages:
             eprint(f"[info] reached max_pages={max_pages}, stopping early")
             break
-
         if not marker:
             break
 
@@ -353,10 +310,8 @@ def fetch_ripple_state_issuers(
                 discovered_currencies=len(issuer_currencies.get(issuer, set())),
             )
         )
-
     rows.sort(key=lambda x: (-x.trustline_objects, -x.discovered_currencies, x.issuer))
     return rows
-
 
 def filter_issuer_results(
     rows: List[IssuerSummary],
@@ -368,7 +323,6 @@ def filter_issuer_results(
         filtered = filtered[:top]
     return filtered
 
-
 def print_issuer_table(rows: List[IssuerSummary]) -> None:
     if not rows:
         print("No results.")
@@ -376,29 +330,26 @@ def print_issuer_table(rows: List[IssuerSummary]) -> None:
 
     headers = ["Issuer Address", "Trustline Objects", "Discovered Currencies"]
     widths = [34, 18, 21]
-
+    
     fmt = (
         f"{{:<{widths[0]}}} "
         f"{{:>{widths[1]}}} "
         f"{{:>{widths[2]}}}"
     )
-
+    
     print(fmt.format(*headers))
     print("-" * (sum(widths) + 4))
     for row in rows:
-        print(
-            fmt.format(
-                row.issuer,
-                row.trustline_objects,
-                row.discovered_currencies,
-            )
-        )
-
+        print(fmt.format(
+            row.issuer[:33] + "..." if len(row.issuer) > 33 else row.issuer,
+            row.trustline_objects,
+            row.discovered_currencies,
+        ))
 
 def write_issuer_json(rows: List[IssuerSummary], out_path: Optional[str]) -> None:
     data = [asdict(r) for r in rows]
     text = json.dumps(data, indent=2, ensure_ascii=False)
-
+    
     if out_path:
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(text)
@@ -406,47 +357,91 @@ def write_issuer_json(rows: List[IssuerSummary], out_path: Optional[str]) -> Non
     else:
         print(text)
 
-
 def write_issuer_csv(rows: List[IssuerSummary], out_path: Optional[str]) -> None:
     if not out_path:
         raise ValueError("--out is required when --format csv is used")
-
+    
     with open(out_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(
-            ["issuer_address", "trustline_objects", "discovered_currencies"]
-        )
+        writer.writerow(["issuer_address", "trustline_objects", "discovered_currencies"])
         for row in rows:
-            writer.writerow(
-                [row.issuer, row.trustline_objects, row.discovered_currencies]
-            )
-
+            writer.writerow([row.issuer, row.trustline_objects, row.discovered_currencies])
     print(f"[ok] wrote CSV to {out_path}")
 
+def run_top_assets(args: argparse.Namespace) -> int:
+    """Rank assets by number of trustlines discovered."""
+    client = make_client(args.rpc_url)
+    marker: Optional[str] = None
+    page = 0
+    assets: Dict[str, int] = {}
+
+    print("[info] scanning assets across network...")
+    
+    while True:
+        page += 1
+        req = LedgerData(
+            ledger_index="validated",
+            limit=200,
+            marker=marker,
+            binary=False,
+        )
+        
+        result = request_with_retry(
+            client=client,
+            request_obj=req,
+            retries=args.retries,
+            backoff=args.retry_backoff,
+            rate_limit_seconds=args.rate_limit,
+        )
+
+        for obj in result.get("state", []):
+            if obj.get("LedgerEntryType") != "RippleState":
+                continue
+            
+            # 修复：安全访问嵌套字典
+            low_limit = obj.get("LowLimit", {})
+            currency_raw = low_limit.get("currency", "")
+            if currency_raw:
+                currency = normalize_currency(currency_raw)
+                assets[currency] = assets.get(currency, 0) + 1
+
+        marker = result.get("marker")
+        print(f"[info] page {page}")
+        
+        if not marker or page >= 5:
+            break
+
+    ranked = sorted(assets.items(), key=lambda x: x[1], reverse=True)
+    
+    print("\nAsset Trustlines")
+    print("-----------------------")
+    for asset, count in ranked[:args.limit]:
+        print(f"{asset:10} {count}")
+    
+    return 0
 
 def validate_common_args(args: argparse.Namespace) -> int:
     if args.limit <= 0:
         eprint("[error] --limit must be > 0")
         return 2
-
+    
     if args.max_pages is not None and args.max_pages <= 0:
         eprint("[error] --max-pages must be > 0")
         return 2
-
+    
     if args.min_trustlines < 0:
         eprint("[error] --min-trustlines must be >= 0")
         return 2
-
+    
     if args.top is not None and args.top <= 0:
         eprint("[error] --top must be > 0")
         return 2
-
+    
     if args.limit > MAX_LIMIT:
         eprint(f"[warn] --limit capped from {args.limit} to {MAX_LIMIT}")
         args.limit = MAX_LIMIT
-
+    
     return 0
-
 
 def run_scan(args: argparse.Namespace) -> int:
     if not args.issuer:
@@ -458,7 +453,7 @@ def run_scan(args: argparse.Namespace) -> int:
         return rc
 
     client = make_client(args.rpc_url)
-
+    
     eprint(f"[info] rpc_url={args.rpc_url}")
     eprint(f"[info] issuer={args.issuer}")
     eprint(f"[info] limit={args.limit}")
@@ -493,11 +488,11 @@ def run_scan(args: argparse.Namespace) -> int:
     if args.format == "table":
         print_asset_table(rows)
         return 0
-
+    
     if args.format == "json":
         write_asset_json(rows, args.out)
         return 0
-
+    
     if args.format == "csv":
         try:
             write_asset_csv(rows, args.out)
@@ -509,14 +504,13 @@ def run_scan(args: argparse.Namespace) -> int:
     eprint(f"[error] unsupported format: {args.format}")
     return 2
 
-
 def run_scan_network(args: argparse.Namespace) -> int:
     rc = validate_common_args(args)
     if rc != 0:
         return rc
 
     client = make_client(args.rpc_url)
-
+    
     eprint(f"[info] rpc_url={args.rpc_url}")
     eprint(f"[info] limit={args.limit}")
     if args.max_pages:
@@ -545,11 +539,11 @@ def run_scan_network(args: argparse.Namespace) -> int:
     if args.format == "table":
         print_issuer_table(rows)
         return 0
-
+    
     if args.format == "json":
         write_issuer_json(rows, args.out)
         return 0
-
+    
     if args.format == "csv":
         try:
             write_issuer_csv(rows, args.out)
@@ -561,84 +555,26 @@ def run_scan_network(args: argparse.Namespace) -> int:
     eprint(f"[error] unsupported format: {args.format}")
     return 2
 
-
 def run_top_issuers(args: argparse.Namespace) -> int:
-    """
-    Top issuers by trustline count, reuse scan-network.
-    """
+    """Top issuers by trustline count, reuse scan-network."""
     print("[info] ranking issuers...")
-    args.top = args.limit
-    # 直接复用 scan-network 的逻辑
+    args.top = args.limit  # 设置top限制
     return run_scan_network(args)
-
-def run_top_assets(args: argparse.Namespace) -> int:
-    """
-    Rank assets by number of trustlines discovered.
-    """
-    client = make_client(args.rpc_url)
-
-    marker: Optional[Any] = None
-    page = 0
-    assets: Dict[str, int] = {}
-
-    print("[info] scanning assets across network...")
-
-    while True:
-        page += 1
-
-        req = LedgerData(
-            ledger_index="validated",
-            limit=200,
-            marker=marker,
-            binary=False,
-        )
-        result = client.request(req).result
-
-        for obj in result.get("state", []):
-            if obj.get("LedgerEntryType") != "RippleState":
-                continue
-
-            # ← 修复这里：正确缩进 + 变量定义顺序
-            currency_raw = obj["LowLimit"]["currency"]
-            currency = normalize_currency(currency_raw)
-            assets[currency] = assets.get(currency, 0) + 1
-
-        marker = result.get("marker")
-        print(f"[info] page {page}")
-
-        if not marker:
-            break
-        if page >= 5:
-            break
-
-    ranked = sorted(
-        assets.items(),
-        key=lambda x: x[1],
-        reverse=True,
-    )
-
-    print("\nAsset      Trustlines")
-    print("-----------------------")
-    for asset, count in ranked[: args.limit]:
-        print(f"{asset:10} {count}")
-
-    return 0
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="monitor.py",
-        description="XRPL Issuer / Trustline Scanner v0.3",
+        description="XRPL Issuer / Trustline Scanner v0.4",
     )
-
+    
     subparsers = parser.add_subparsers(dest="command", required=True)
-
-    # scan (保持不变)
+    
+    # scan
     scan = subparsers.add_parser(
         "scan",
         help="Scan trust-line assets for a given issuer",
     )
-    scan.add_argument("--issuer", type=str, help="Issuer account address (required)")
+    scan.add_argument("--issuer", type=str, required=True, help="Issuer account address")
     scan.add_argument(
         "--sort",
         choices=["trustlines", "holders", "currency"],
@@ -654,8 +590,8 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument(
         "--max-pages",
         type=int,
-        default=5,
-        help="Stop after this many pages (default: 5)",
+        default=None,
+        help="Stop after this many pages",
     )
     scan.add_argument(
         "--min-trustlines",
@@ -706,7 +642,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Exponential retry backoff base (default: {DEFAULT_RETRY_BACKOFF})",
     )
 
-    # scan-network (保持不变)  
+    # scan-network
     network = subparsers.add_parser(
         "scan-network",
         help="Discover issuers from RippleState objects across XRPL",
@@ -772,7 +708,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Exponential retry backoff base (default: {DEFAULT_RETRY_BACKOFF})",
     )
 
-    # top-assets (保持不变)
+    # top-assets
     top_assets = subparsers.add_parser(
         "top-assets",
         help="Show top assets by trustlines",
@@ -789,8 +725,26 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_RPC_URL,
         help="XRPL JSON-RPC URL",
     )
+    top_assets.add_argument(
+        "--rate-limit",
+        type=float,
+        default=DEFAULT_RATE_LIMIT_SECONDS,
+        help=f"Seconds to sleep before each request (default: {DEFAULT_RATE_LIMIT_SECONDS})",
+    )
+    top_assets.add_argument(
+        "--retries",
+        type=int,
+        default=DEFAULT_RETRIES,
+        help=f"Max retry attempts (default: {DEFAULT_RETRIES})",
+    )
+    top_assets.add_argument(
+        "--retry-backoff",
+        type=float,
+        default=DEFAULT_RETRY_BACKOFF,
+        help=f"Exponential retry backoff base (default: {DEFAULT_RETRY_BACKOFF})",
+    )
 
-    # top-issuers ← **这里是修复重点！**
+    # top-issuers
     top_issuers = subparsers.add_parser(
         "top-issuers",
         help="Show top issuers by trustlines",
@@ -852,26 +806,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     return parser
 
-
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
 
     if args.command == "scan":
         return run_scan(args)
-
-    if args.command == "scan-network":
+    elif args.command == "scan-network":
         return run_scan_network(args)
-
-    if args.command == "top-assets":
+    elif args.command == "top-assets":
         return run_top_assets(args)
-
-    if args.command == "top-issuers":
+    elif args.command == "top-issuers":
         return run_top_issuers(args)
-
-    eprint(f"[error] unknown command: {args.command}")
-    return 2
-
+    else:
+        eprint(f"[error] unknown command: {args.command}")
+        return 2
 
 if __name__ == "__main__":
     raise SystemExit(main())
