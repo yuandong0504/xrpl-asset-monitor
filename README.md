@@ -1,39 +1,43 @@
 # XRPL Asset Monitor v0.4
 
-🚀 Lightweight CLI tool for exploring issued assets on the XRP Ledger.
+🚀 Lightweight CLI tool for exploring issued assets on the XRP Ledger
+
+---
 
 ## Features
 
-- Scan assets issued by a specific XRPL account
+- Scan assets issued by an account
 - Discover issuers across the XRPL network
-- Rank assets by trustline count
-- Rank issuers by discovered trustline objects
-- Export results to JSON or CSV
-- Real-time progress statistics
-- Automatic retry for network errors
-- Smart pagination stop to avoid endless scans
+- Rank top assets by trustlines
+- Rank top issuers
+- Export JSON or CSV
+- Live scan statistics
+- Smart pagination controls
 
 ---
 
-# Installation
+## Installation
 
-Install dependency:
-
+```bash
 pip install xrpl-py
-
-Create alias (optional):
-
 alias xrpl="python3 monitor.py"
+```
 
 ---
 
-# Quick Start
+## Quick Start
 
-## Scan assets from a specific issuer
+### Scan assets issued by an account
 
-xrpl scan --issuer rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz
+⚠️ Always use `--max-pages` to avoid scanning the entire ledger.
 
-Recommended scan for large issuers:
+```bash
+xrpl scan \
+  --issuer rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz \
+  --max-pages 10
+```
+
+Filter high-liquidity assets:
 
 ```bash
 xrpl scan \
@@ -42,144 +46,109 @@ xrpl scan \
   --max-pages 10 \
   --top 20
 ```
-Example output:
-
-Issuer Address                           Currency Code     Trustlines Count   Unique Holders
----------------------------------------------------------------------------------------------
-rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz        USDT               125                120
-rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz        USD                89                 85
-rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz        EUR                67                 64
-
----
-
-# Discover issuers across XRPL
-
-Scan RippleState objects to discover issuers:
-
-xrpl scan-network --max-pages 10 --top 20
 
 Export JSON:
 
-xrpl scan-network --max-pages 20 --format json --out issuers.json
+```bash
+xrpl scan \
+  --issuer rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz \
+  --max-pages 10 \
+  --format json \
+  --out issuer_assets.json
+```
 
 ---
 
-# Top Assets
+## Discover issuers across XRPL
 
-Rank assets by trustline count:
+```bash
+xrpl scan-network \
+  --max-pages 20 \
+  --top 20
+```
 
-xrpl top-assets --limit 20
+Export JSON:
 
-Example output:
-
-Asset      Trustlines
------------------------
-SOLO       15
-BTC        8
-ELS        7
-USD        6
-CNY        5
-
----
-
-# Top Issuers
-
-Rank issuers discovered across ledger scans:
-
-xrpl top-issuers --limit 15 --max-pages 15
+```bash
+xrpl scan-network \
+  --max-pages 20 \
+  --format json \
+  --out issuers.json
+```
 
 ---
 
-# Parameters
+## Top assets across network
 
-| Parameter | Description | Default |
-|----------|-------------|--------|
-| --min-trustlines N | Only show assets with ≥ N trustlines | 0 |
-| --max-pages N | Maximum ledger pages to scan | unlimited |
-| --top N | Show top N results | all |
-| --limit N | Objects per request | 200 |
-| --format | Output format | table |
-| --out file | Output file path | stdout |
+```bash
+xrpl top-assets \
+  --limit 20
+```
 
 ---
 
-# Output Formats
+## Top issuers across network
 
-Table (default)
-
-Issuer Address                           Trustline Objects   Discovered Currencies
------------------------------------------------------------------------------
-rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz        15                  3
-
----
-
-JSON output
-
-xrpl scan --issuer r... --format json
-
-Example:
-
-[
-  {
-    "issuer": "rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz",
-    "currency": "USDT",
-    "trustlines_count": 125,
-    "unique_holders": 120
-  }
-]
+```bash
+xrpl top-issuers \
+  --limit 20 \
+  --max-pages 20
+```
 
 ---
 
-CSV export
+## Parameters
 
-xrpl scan --issuer r... --format csv --out assets.csv
-
----
-
-# Use Cases
-
-DeFi research  
-Discover high-adoption tokens and issuers.
-
-XRPL ecosystem analysis  
-Track asset distribution and trustline growth.
-
-Token discovery  
-Identify widely adopted XRPL assets.
-
-Data export  
-Collect data for quantitative research or analytics.
+| Parameter | Description | Example |
+|-----------|-------------|--------|
+| `--issuer` | Issuer address | `--issuer r...` |
+| `--min-trustlines` | Minimum trustlines required | `--min-trustlines 50` |
+| `--max-pages` | Maximum ledger pages to scan | `--max-pages 10` |
+| `--limit` | Objects per request | `--limit 200` |
+| `--top` | Show only top N results | `--top 20` |
+| `--format` | Output format | `json` / `csv` |
+| `--out` | Output file | `--out data.json` |
 
 ---
 
-# Notes
+## Example Output
 
-- Large issuers may have thousands of trustlines
-- Always use --max-pages to limit scan size
-- Default rate limit avoids RPC throttling
-- RPC endpoint can be customized with --rpc-url
-
----
-
-# Example Workflow
-
-Discover active issuers:
-
-xrpl top-issuers --limit 20 --max-pages 20 > issuers.txt
-
-Analyze a specific issuer:
-
-xrpl scan --issuer rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz \
---min-trustlines 100 \
---max-pages 20 \
---format json > issuer_assets.json
-
-Export network issuer list:
-
-xrpl scan-network --max-pages 50 --format csv --out network_issuers.csv
+```
+Issuer Address                           Currency     Trustlines   Holders
+---------------------------------------------------------------------------
+rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz        USD          120          118
+rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz        EUR           85           83
+rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz        BTC           64           61
+```
 
 ---
 
-# License
+## Performance Notes
+
+XRPL can contain millions of trustlines.
+
+Without page limits a scan may run for a long time.
+
+Recommended settings:
+
+| Use Case | Suggested Setting |
+|--------|----------------|
+| Quick analysis | `--max-pages 10` |
+| Research | `--max-pages 50` |
+| Deep scan | `--max-pages 200` |
+
+---
+
+## Use Cases
+
+- DeFi research  
+- Token issuer discovery  
+- Liquidity analysis  
+- Trustline distribution tracking  
+- XRPL data export for quantitative analysis
+
+---
+
+## License
 
 MIT
