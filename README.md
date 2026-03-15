@@ -35,11 +35,13 @@ xrpl scan --issuer rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz
 
 Recommended scan for large issuers:
 
-xrpl scan --issuer rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz \
---min-trustlines 50 \
---max-pages 10 \
---top 20
-
+```bash
+xrpl scan \
+  --issuer rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz \
+  --min-trustlines 50 \
+  --max-pages 10 \
+  --top 20
+```
 Example output:
 
 Issuer Address                           Currency Code     Trustlines Count   Unique Holders
