@@ -46,6 +46,24 @@ Replace the issuer address with any valid XRPL issuer account.
     rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh  CNY                                   59                59
     rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh  USD                                   39                39
     rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh  RLUSD                                  6                 6
+ 
+## Usage
+
+Scan an issuer:
+
+    python3 monitor.py scan --issuer r...
+
+Filter small assets:
+
+    python3 monitor.py scan \
+      --issuer r... \
+      --min-trustlines 50
+
+Limit results:
+
+    python3 monitor.py scan \
+      --issuer r... \
+      --top 10
 
 ## Notes
 
