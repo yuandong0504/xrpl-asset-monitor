@@ -1,93 +1,70 @@
-# XRPL Asset Monitor
+# XRPL Asset Monitor v0.4
 
-A lightweight CLI tool for exploring issued assets on the XRP Ledger.
+🚀 Lightweight CLI tool for exploring issued assets on the XRP Ledger.
 
-This tool helps developers and researchers inspect XRPL token activity from the command line.
+## Features
 
-Capabilities:
-
-- Scan assets issued by a specific account
+- Scan assets issued by a specific XRPL account
 - Discover issuers across the XRPL network
 - Rank assets by trustline count
-- Rank issuers by trustline objects
-- Export results for analysis
+- Rank issuers by discovered trustline objects
+- Export results to JSON or CSV
+- Real-time progress statistics
+- Automatic retry for network errors
+- Smart pagination stop to avoid endless scans
 
+---
 
---------------------------------------------------
+# Installation
 
-WHY THIS TOOL EXISTS
+Install dependency:
 
-XRPL explorers like XRPSCAN and Bithomp are useful for browsing tokens, but they are not designed for:
+pip install xrpl-py
 
-- command-line workflows
-- automation
-- bulk analysis
-- quick issuer discovery
+Create alias (optional):
 
-This tool provides a simple CLI interface for exploring XRPL token activity.
+alias xrpl="python3 monitor.py"
 
+---
 
---------------------------------------------------
+# Quick Start
 
-INSTALLATION
+## Scan assets from a specific issuer
 
-Clone the repository and install dependencies:
+xrpl scan --issuer rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz
 
-pip install -r requirements.txt
+Recommended scan for large issuers:
 
-(Optional) create a shell alias:
-
-alias xrpl="python3 ~/xrpl-asset-monitor/monitor.py"
-
-
---------------------------------------------------
-
-COMMANDS
-
-
-1. Scan assets from a single issuer
-
-xrpl scan --issuer rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh
+xrpl scan --issuer rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz \
+--min-trustlines 50 \
+--max-pages 10 \
+--top 20
 
 Example output:
 
-Issuer Address                      Currency Code          Trustlines Count   Unique Holders
-----------------------------------------------------------------------------------------------
-rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh CNY                                  59               59
-rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh USD                                  39               39
-rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh RLUSD                                 6                6
+Issuer Address                           Currency Code     Trustlines Count   Unique Holders
+---------------------------------------------------------------------------------------------
+rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz        USDT               125                120
+rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz        USD                89                 85
+rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz        EUR                67                 64
 
+---
 
-Filter assets:
+# Discover issuers across XRPL
 
-xrpl scan --issuer r... --min-trustlines 50
+Scan RippleState objects to discover issuers:
 
-Limit output:
+xrpl scan-network --max-pages 10 --top 20
 
-xrpl scan --issuer r... --top 10
+Export JSON:
 
+xrpl scan-network --max-pages 20 --format json --out issuers.json
 
---------------------------------------------------
+---
 
-2. Discover issuers across XRPL
+# Top Assets
 
-Scan RippleState objects to discover asset issuers.
-
-xrpl scan-network --max-pages 5
-
-Example output:
-
-Issuer Address                      Trustline Objects    Discovered Currencies
------------------------------------------------------------------------------
-rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz                  4                     1
-rUQXurByxmKni4aLpuWMYMxxV5GWT1Azw2                  2                     1
-
-
---------------------------------------------------
-
-3. Top assets across the network
-
-Rank currencies by number of discovered trustlines.
+Rank assets by trustline count:
 
 xrpl top-assets --limit 20
 
@@ -101,59 +78,106 @@ ELS        7
 USD        6
 CNY        5
 
+---
 
-NOTE
+# Top Issuers
 
-Results are based on a partial ledger scan.
-Increase max-pages to analyze more ledger data.
+Rank issuers discovered across ledger scans:
 
+xrpl top-issuers --limit 15 --max-pages 15
 
---------------------------------------------------
+---
 
-4. Top issuers
+# Parameters
 
-Rank issuers by trustline objects discovered in the ledger.
+| Parameter | Description | Default |
+|----------|-------------|--------|
+| --min-trustlines N | Only show assets with ≥ N trustlines | 0 |
+| --max-pages N | Maximum ledger pages to scan | unlimited |
+| --top N | Show top N results | all |
+| --limit N | Objects per request | 200 |
+| --format | Output format | table |
+| --out file | Output file path | stdout |
 
-xrpl top-issuers --limit 10 --max-pages 10
+---
 
-Example output:
+# Output Formats
 
-Issuer Address                      Trustline Objects
------------------------------------------------------
-rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz   4
-rUQXurByxmKni4aLpuWMYMxxV5GWT1Azw2   2
+Table (default)
 
+Issuer Address                           Trustline Objects   Discovered Currencies
+-----------------------------------------------------------------------------
+rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz        15                  3
 
---------------------------------------------------
+---
 
-NOTES
+JSON output
 
-XRPL uses two currency formats:
+xrpl scan --issuer r... --format json
 
-Standard codes
-USD, EUR, BTC
+Example:
 
-160-bit currency codes
-hex encoded tokens
+[
+  {
+    "issuer": "rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz",
+    "currency": "USDT",
+    "trustlines_count": 125,
+    "unique_holders": 120
+  }
+]
 
-The tool attempts to decode hex codes when possible.
+---
 
+CSV export
 
---------------------------------------------------
+xrpl scan --issuer r... --format csv --out assets.csv
 
-USE CASES
+---
 
-Possible applications:
+# Use Cases
 
-- XRPL token research
-- issuer discovery
-- DeFi asset analysis
-- token index building
-- XRPL ecosystem monitoring
+DeFi research  
+Discover high-adoption tokens and issuers.
 
+XRPL ecosystem analysis  
+Track asset distribution and trustline growth.
 
---------------------------------------------------
+Token discovery  
+Identify widely adopted XRPL assets.
 
-LICENSE
+Data export  
+Collect data for quantitative research or analytics.
+
+---
+
+# Notes
+
+- Large issuers may have thousands of trustlines
+- Always use --max-pages to limit scan size
+- Default rate limit avoids RPC throttling
+- RPC endpoint can be customized with --rpc-url
+
+---
+
+# Example Workflow
+
+Discover active issuers:
+
+xrpl top-issuers --limit 20 --max-pages 20 > issuers.txt
+
+Analyze a specific issuer:
+
+xrpl scan --issuer rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz \
+--min-trustlines 100 \
+--max-pages 20 \
+--format json > issuer_assets.json
+
+Export network issuer list:
+
+xrpl scan-network --max-pages 50 --format csv --out network_issuers.csv
+
+---
+
+# License
 
 MIT
