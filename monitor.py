@@ -99,11 +99,15 @@ def fetch_account_lines(
     backoff: float,
     rate_limit_seconds: float,
     max_pages: Optional[int] = None,
+    min_trustlines: int = 0,  # 新增参数
 ) -> List[Dict[str, Any]]:
     marker: Optional[str] = None
     all_lines: List[Dict[str, Any]] = []
     page = 0
+    stats: Dict[str, int] = {}  # 实时统计每个货币的信任线数量
 
+    print(f"[info] 开始扫描，目标min_trustlines={min_trustlines}")
+    
     while True:
         page += 1
         req = AccountLines(
@@ -123,16 +127,35 @@ def fetch_account_lines(
         
         lines = result.get("lines", [])
         all_lines.extend(lines)
-        eprint(f"[info] page {page}: fetched {len(lines)} lines (total {len(all_lines)})")
-
-        marker = result.get("marker")
         
-        if max_pages is not None and page >= max_pages:
-            eprint(f"[info] reached max_pages={max_pages}, stopping early")
+        # 实时统计
+        for line in lines:
+            currency_raw = line.get("currency", "UNKNOWN")
+            currency = normalize_currency(currency_raw)
+            stats[currency] = stats.get(currency, 0) + 1
+        
+        total_lines = len(all_lines)
+        qualified_assets = sum(1 for count in stats.values() if count >= min_trustlines)
+        
+        print(f"[info] page {page}: {len(lines)} lines (总计 {total_lines:,}) | "
+              f"合格资产: {qualified_assets} (>= {min_trustlines}) | "
+              f"资产种类: {len(stats)}")
+        
+        # 🔥 智能停止条件
+        marker = result.get("marker")
+        if max_pages and page >= max_pages:
+            print(f"[info] 达到最大页数 {max_pages}，提前停止")
             break
         if not marker:
+            print("[info] 无更多分页，扫描完成")
+            break
+        
+        # 🚀 如果找到足够合格资产，提前停止（避免无限抓取）
+        if qualified_assets >= 10 and total_lines > 2000:  # 可调整阈值
+            print(f"[info] 已找到 {qualified_assets} 个合格资产，自动停止分页")
             break
 
+    print(f"[ok] 扫描完成！总信任线: {len(all_lines):,}，合格资产: {qualified_assets}")
     return all_lines
 
 def aggregate_lines(issuer: str, lines: List[Dict[str, Any]]) -> List[AssetStats]:
@@ -189,31 +212,6 @@ def filter_asset_results(
     if top is not None:
         filtered = filtered[:top]
     return filtered
-
-def print_asset_table(rows: List[AssetStats]) -> None:
-    if not rows:
-        print("No results.")
-        return
-
-    headers = ["Issuer Address", "Currency Code", "Trustlines Count", "Unique Holders"]
-    widths = [34, 20, 18, 16]
-    
-    fmt = (
-        f"{{:<{widths[0]}}} "
-        f"{{:<{widths[1]}}} "
-        f"{{:>{widths[2]}}} "
-        f"{{:>{widths[3]}}}"
-    )
-    
-    print(fmt.format(*headers))
-    print("-" * (sum(widths) + 6))
-    for row in rows:
-        print(fmt.format(
-            row.issuer[:33] + "..." if len(row.issuer) > 33 else row.issuer,
-            row.currency,
-            row.trustlines_count,
-            row.unique_holders,
-        ))
 
 def write_asset_json(rows: List[AssetStats], out_path: Optional[str]) -> None:
     data = [asdict(r) for r in rows]
@@ -329,7 +327,7 @@ def print_issuer_table(rows: List[IssuerSummary]) -> None:
         return
 
     headers = ["Issuer Address", "Trustline Objects", "Discovered Currencies"]
-    widths = [34, 18, 21]
+    widths = [42, 20, 22]  # 增加地址宽度到42字符（完整显示大部分地址）
     
     fmt = (
         f"{{:<{widths[0]}}} "
@@ -340,11 +338,32 @@ def print_issuer_table(rows: List[IssuerSummary]) -> None:
     print(fmt.format(*headers))
     print("-" * (sum(widths) + 4))
     for row in rows:
-        print(fmt.format(
-            row.issuer[:33] + "..." if len(row.issuer) > 33 else row.issuer,
-            row.trustline_objects,
-            row.discovered_currencies,
-        ))
+        # 完整显示地址，不截断
+        addr_display = row.issuer
+        print(fmt.format(addr_display, row.trustline_objects, row.discovered_currencies))
+
+def print_asset_table(rows: List[AssetStats]) -> None:
+    if not rows:
+        print("No results.")
+        return
+
+    headers = ["Issuer Address", "Currency Code", "Trustlines Count", "Unique Holders"]
+    widths = [42, 20, 18, 16]  # 增加地址宽度
+    
+    fmt = (
+        f"{{:<{widths[0]}}} "
+        f"{{:<{widths[1]}}} "
+        f"{{:>{widths[2]}}} "
+        f"{{:>{widths[3]}}}"
+    )
+    
+    print(fmt.format(*headers))
+    print("-" * (sum(widths) + 6))
+    for row in rows:
+        # 完整显示地址
+        addr_display = row.issuer
+        print(fmt.format(addr_display, row.currency, row.trustlines_count, row.unique_holders))
+
 
 def write_issuer_json(rows: List[IssuerSummary], out_path: Optional[str]) -> None:
     data = [asdict(r) for r in rows]
@@ -466,6 +485,7 @@ def run_scan(args: argparse.Namespace) -> int:
     eprint("[info] fetching trust lines...")
 
     try:
+        # 在 run_scan 函数中修改调用
         lines = fetch_account_lines(
             client=client,
             issuer=args.issuer,
@@ -474,7 +494,9 @@ def run_scan(args: argparse.Namespace) -> int:
             backoff=args.retry_backoff,
             rate_limit_seconds=args.rate_limit,
             max_pages=args.max_pages,
+            min_trustlines=args.min_trustlines,  # 传入参数
         )
+
     except Exception as exc:
         eprint(f"[error] failed to fetch account lines: {exc}")
         return 1
