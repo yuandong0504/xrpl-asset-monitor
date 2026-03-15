@@ -5,19 +5,8 @@ XRPL Issuer / Trustline Scanner v0.3
 Commands:
 - scan: scan trust-line assets for a single issuer
 - scan-network: discover issuers from RippleState objects via ledger_data
-
-Features:
-- issuer-only scan
-- network issuer discovery
-- aggregate by issuer/currency
-- trustlines count
-- unique holders
-- CSV / JSON / table output
-- retry + simple rate limiting
-- max-pages for large issuers
-- progress logging
-- min-trustlines filter
-- top-N output
+- top-assets: show top assets by trustlines
+- top-issuers: show top issuers by trustlines
 """
 
 from __future__ import annotations
@@ -32,7 +21,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from xrpl.clients import JsonRpcClient
 from xrpl.models.requests import AccountLines, LedgerData
-
 
 DEFAULT_RPC_URL = "https://s1.ripple.com:51234/"
 DEFAULT_LIMIT = 200
@@ -207,13 +195,16 @@ def sort_asset_results(rows: List[AssetStats], sort_by: str) -> List[AssetStats]
             rows,
             key=lambda x: (-x.trustlines_count, -x.unique_holders, x.currency),
         )
+
     if sort_by == "holders":
         return sorted(
             rows,
             key=lambda x: (-x.unique_holders, -x.trustlines_count, x.currency),
         )
+
     if sort_by == "currency":
         return sorted(rows, key=lambda x: (x.currency, x.issuer))
+
     return rows
 
 
@@ -237,9 +228,9 @@ def print_asset_table(rows: List[AssetStats]) -> None:
     widths = [34, 20, 18, 16]
 
     fmt = (
-        f"{{:<{widths[0]}}}  "
-        f"{{:<{widths[1]}}}  "
-        f"{{:>{widths[2]}}}  "
+        f"{{:<{widths[0]}}} "
+        f"{{:<{widths[1]}}} "
+        f"{{:>{widths[2]}}} "
         f"{{:>{widths[3]}}}"
     )
 
@@ -346,7 +337,6 @@ def fetch_ripple_state_issuers(
         )
 
         marker = result.get("marker")
-
         if max_pages is not None and page >= max_pages:
             eprint(f"[info] reached max_pages={max_pages}, stopping early")
             break
@@ -388,8 +378,8 @@ def print_issuer_table(rows: List[IssuerSummary]) -> None:
     widths = [34, 18, 21]
 
     fmt = (
-        f"{{:<{widths[0]}}}  "
-        f"{{:>{widths[1]}}}  "
+        f"{{:<{widths[0]}}} "
+        f"{{:>{widths[1]}}} "
         f"{{:>{widths[2]}}}"
     )
 
@@ -572,6 +562,69 @@ def run_scan_network(args: argparse.Namespace) -> int:
     return 2
 
 
+def run_top_issuers(args: argparse.Namespace) -> int:
+    """
+    Top issuers by trustline count, reuse scan-network.
+    """
+    print("[info] ranking issuers...")
+    args.top = args.limit
+    # 直接复用 scan-network 的逻辑
+    return run_scan_network(args)
+
+def run_top_assets(args: argparse.Namespace) -> int:
+    """
+    Rank assets by number of trustlines discovered.
+    """
+    client = make_client(args.rpc_url)
+
+    marker: Optional[Any] = None
+    page = 0
+    assets: Dict[str, int] = {}
+
+    print("[info] scanning assets across network...")
+
+    while True:
+        page += 1
+
+        req = LedgerData(
+            ledger_index="validated",
+            limit=200,
+            marker=marker,
+            binary=False,
+        )
+        result = client.request(req).result
+
+        for obj in result.get("state", []):
+            if obj.get("LedgerEntryType") != "RippleState":
+                continue
+
+            # ← 修复这里：正确缩进 + 变量定义顺序
+            currency_raw = obj["LowLimit"]["currency"]
+            currency = normalize_currency(currency_raw)
+            assets[currency] = assets.get(currency, 0) + 1
+
+        marker = result.get("marker")
+        print(f"[info] page {page}")
+
+        if not marker:
+            break
+        if page >= 5:
+            break
+
+    ranked = sorted(
+        assets.items(),
+        key=lambda x: x[1],
+        reverse=True,
+    )
+
+    print("\nAsset      Trustlines")
+    print("-----------------------")
+    for asset, count in ranked[: args.limit]:
+        print(f"{asset:10} {count}")
+
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="monitor.py",
@@ -580,6 +633,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    # scan (保持不变)
     scan = subparsers.add_parser(
         "scan",
         help="Scan trust-line assets for a given issuer",
@@ -600,8 +654,8 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument(
         "--max-pages",
         type=int,
-        default=None,
-        help="Stop after this many pages",
+        default=5,
+        help="Stop after this many pages (default: 5)",
     )
     scan.add_argument(
         "--min-trustlines",
@@ -652,6 +706,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Exponential retry backoff base (default: {DEFAULT_RETRY_BACKOFF})",
     )
 
+    # scan-network (保持不变)  
     network = subparsers.add_parser(
         "scan-network",
         help="Discover issuers from RippleState objects across XRPL",
@@ -717,6 +772,84 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Exponential retry backoff base (default: {DEFAULT_RETRY_BACKOFF})",
     )
 
+    # top-assets (保持不变)
+    top_assets = subparsers.add_parser(
+        "top-assets",
+        help="Show top assets by trustlines",
+    )
+    top_assets.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Number of assets to display",
+    )
+    top_assets.add_argument(
+        "--rpc-url",
+        type=str,
+        default=DEFAULT_RPC_URL,
+        help="XRPL JSON-RPC URL",
+    )
+
+    # top-issuers ← **这里是修复重点！**
+    top_issuers = subparsers.add_parser(
+        "top-issuers",
+        help="Show top issuers by trustlines",
+    )
+    top_issuers.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help="Number of issuers to display (also sets --top)",
+    )
+    top_issuers.add_argument(
+        "--max-pages",
+        type=int,
+        default=5,
+        help="Stop after this many ledger_data pages",
+    )
+    top_issuers.add_argument(
+        "--min-trustlines",
+        type=int,
+        default=0,
+        help="Only include issuers with at least this many discovered trustline objects",
+    )
+    top_issuers.add_argument(
+        "--format",
+        choices=["table", "json", "csv"],
+        default="table",
+        help="Output format",
+    )
+    top_issuers.add_argument(
+        "--out",
+        type=str,
+        default=None,
+        help="Output file path (required for csv, optional for json)",
+    )
+    top_issuers.add_argument(
+        "--rpc-url",
+        type=str,
+        default=DEFAULT_RPC_URL,
+        help="XRPL JSON-RPC URL",
+    )
+    top_issuers.add_argument(
+        "--rate-limit",
+        type=float,
+        default=DEFAULT_RATE_LIMIT_SECONDS,
+        help=f"Seconds to sleep before each request (default: {DEFAULT_RATE_LIMIT_SECONDS})",
+    )
+    top_issuers.add_argument(
+        "--retries",
+        type=int,
+        default=DEFAULT_RETRIES,
+        help=f"Max retry attempts (default: {DEFAULT_RETRIES})",
+    )
+    top_issuers.add_argument(
+        "--retry-backoff",
+        type=float,
+        default=DEFAULT_RETRY_BACKOFF,
+        help=f"Exponential retry backoff base (default: {DEFAULT_RETRY_BACKOFF})",
+    )
+
     return parser
 
 
@@ -729,6 +862,12 @@ def main() -> int:
 
     if args.command == "scan-network":
         return run_scan_network(args)
+
+    if args.command == "top-assets":
+        return run_top_assets(args)
+
+    if args.command == "top-issuers":
+        return run_top_issuers(args)
 
     eprint(f"[error] unknown command: {args.command}")
     return 2
