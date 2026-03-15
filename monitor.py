@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-XRPL Issuer / Trustline Scanner
+XRPL Issuer / Trustline Scanner v0.3
 
-Scans trust lines for a given issuer account on XRPL and aggregates by currency.
+Commands:
+- scan: scan trust-line assets for a single issuer
+- scan-network: discover issuers from RippleState objects via ledger_data
 
 Features:
 - issuer-only scan
+- network issuer discovery
 - aggregate by issuer/currency
 - trustlines count
 - unique holders
@@ -15,13 +18,6 @@ Features:
 - progress logging
 - min-trustlines filter
 - top-N output
-
-Examples:
-    python3 monitor.py scan --issuer rEXAMPLE...
-    python3 monitor.py scan --issuer rEXAMPLE... --format json --out results.json
-    python3 monitor.py scan --issuer rEXAMPLE... --format csv --out results.csv
-    python3 monitor.py scan --issuer rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq --max-pages 3
-    python3 monitor.py scan --issuer rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq --min-trustlines 50 --top 10
 """
 
 from __future__ import annotations
@@ -35,7 +31,8 @@ from dataclasses import dataclass, asdict
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from xrpl.clients import JsonRpcClient
-from xrpl.models.requests import AccountLines
+from xrpl.models.requests import AccountLines, LedgerData
+
 
 DEFAULT_RPC_URL = "https://s1.ripple.com:51234/"
 DEFAULT_LIMIT = 200
@@ -51,6 +48,13 @@ class AssetStats:
     currency: str
     trustlines_count: int
     unique_holders: int
+
+
+@dataclass
+class IssuerSummary:
+    issuer: str
+    trustline_objects: int
+    discovered_currencies: int
 
 
 def eprint(*args: Any) -> None:
@@ -84,7 +88,7 @@ def make_client(url: str) -> JsonRpcClient:
 
 def request_with_retry(
     client: JsonRpcClient,
-    request_obj: AccountLines,
+    request_obj: Any,
     retries: int,
     backoff: float,
     rate_limit_seconds: float,
@@ -197,7 +201,7 @@ def aggregate_lines(issuer: str, lines: List[Dict[str, Any]]) -> List[AssetStats
     return results
 
 
-def sort_results(rows: List[AssetStats], sort_by: str) -> List[AssetStats]:
+def sort_asset_results(rows: List[AssetStats], sort_by: str) -> List[AssetStats]:
     if sort_by == "trustlines":
         return sorted(
             rows,
@@ -213,20 +217,18 @@ def sort_results(rows: List[AssetStats], sort_by: str) -> List[AssetStats]:
     return rows
 
 
-def filter_results(
+def filter_asset_results(
     rows: List[AssetStats],
     min_trustlines: int,
     top: Optional[int],
 ) -> List[AssetStats]:
     filtered = [row for row in rows if row.trustlines_count >= min_trustlines]
-
     if top is not None:
         filtered = filtered[:top]
-
     return filtered
 
 
-def print_table(rows: List[AssetStats]) -> None:
+def print_asset_table(rows: List[AssetStats]) -> None:
     if not rows:
         print("No results.")
         return
@@ -254,7 +256,7 @@ def print_table(rows: List[AssetStats]) -> None:
         )
 
 
-def write_json(rows: List[AssetStats], out_path: Optional[str]) -> None:
+def write_asset_json(rows: List[AssetStats], out_path: Optional[str]) -> None:
     data = [asdict(r) for r in rows]
     text = json.dumps(data, indent=2, ensure_ascii=False)
 
@@ -266,7 +268,7 @@ def write_json(rows: List[AssetStats], out_path: Optional[str]) -> None:
         print(text)
 
 
-def write_csv(rows: List[AssetStats], out_path: Optional[str]) -> None:
+def write_asset_csv(rows: List[AssetStats], out_path: Optional[str]) -> None:
     if not out_path:
         raise ValueError("--out is required when --format csv is used")
 
@@ -283,11 +285,156 @@ def write_csv(rows: List[AssetStats], out_path: Optional[str]) -> None:
     print(f"[ok] wrote CSV to {out_path}")
 
 
-def run_scan(args: argparse.Namespace) -> int:
-    if not args.issuer:
-        eprint("[error] requires --issuer")
-        return 2
+def fetch_ripple_state_issuers(
+    client: JsonRpcClient,
+    limit: int,
+    retries: int,
+    backoff: float,
+    rate_limit_seconds: float,
+    max_pages: Optional[int] = None,
+) -> List[IssuerSummary]:
+    marker: Optional[Any] = None
+    page = 0
 
+    issuer_counts: Dict[str, int] = {}
+    issuer_currencies: Dict[str, Set[str]] = {}
+
+    while True:
+        page += 1
+
+        req = LedgerData(
+            ledger_index="validated",
+            limit=limit,
+            marker=marker,
+            binary=False,
+        )
+
+        result = request_with_retry(
+            client=client,
+            request_obj=req,
+            retries=retries,
+            backoff=backoff,
+            rate_limit_seconds=rate_limit_seconds,
+        )
+
+        state_objects = 0
+        for item in result.get("state", []):
+            if item.get("LedgerEntryType") != "RippleState":
+                continue
+
+            state_objects += 1
+
+            low_limit = item.get("LowLimit", {})
+            high_limit = item.get("HighLimit", {})
+
+            low_issuer = low_limit.get("issuer")
+            high_issuer = high_limit.get("issuer")
+            low_currency = normalize_currency(low_limit.get("currency", "UNKNOWN"))
+            high_currency = normalize_currency(high_limit.get("currency", "UNKNOWN"))
+
+            if low_issuer:
+                issuer_counts[low_issuer] = issuer_counts.get(low_issuer, 0) + 1
+                issuer_currencies.setdefault(low_issuer, set()).add(low_currency)
+
+            if high_issuer:
+                issuer_counts[high_issuer] = issuer_counts.get(high_issuer, 0) + 1
+                issuer_currencies.setdefault(high_issuer, set()).add(high_currency)
+
+        eprint(
+            f"[info] network page {page}: processed {state_objects} RippleState objects "
+            f"(issuers so far: {len(issuer_counts)})"
+        )
+
+        marker = result.get("marker")
+
+        if max_pages is not None and page >= max_pages:
+            eprint(f"[info] reached max_pages={max_pages}, stopping early")
+            break
+
+        if not marker:
+            break
+
+    rows: List[IssuerSummary] = []
+    for issuer, count in issuer_counts.items():
+        rows.append(
+            IssuerSummary(
+                issuer=issuer,
+                trustline_objects=count,
+                discovered_currencies=len(issuer_currencies.get(issuer, set())),
+            )
+        )
+
+    rows.sort(key=lambda x: (-x.trustline_objects, -x.discovered_currencies, x.issuer))
+    return rows
+
+
+def filter_issuer_results(
+    rows: List[IssuerSummary],
+    min_trustlines: int,
+    top: Optional[int],
+) -> List[IssuerSummary]:
+    filtered = [row for row in rows if row.trustline_objects >= min_trustlines]
+    if top is not None:
+        filtered = filtered[:top]
+    return filtered
+
+
+def print_issuer_table(rows: List[IssuerSummary]) -> None:
+    if not rows:
+        print("No results.")
+        return
+
+    headers = ["Issuer Address", "Trustline Objects", "Discovered Currencies"]
+    widths = [34, 18, 21]
+
+    fmt = (
+        f"{{:<{widths[0]}}}  "
+        f"{{:>{widths[1]}}}  "
+        f"{{:>{widths[2]}}}"
+    )
+
+    print(fmt.format(*headers))
+    print("-" * (sum(widths) + 4))
+    for row in rows:
+        print(
+            fmt.format(
+                row.issuer,
+                row.trustline_objects,
+                row.discovered_currencies,
+            )
+        )
+
+
+def write_issuer_json(rows: List[IssuerSummary], out_path: Optional[str]) -> None:
+    data = [asdict(r) for r in rows]
+    text = json.dumps(data, indent=2, ensure_ascii=False)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(text)
+        print(f"[ok] wrote JSON to {out_path}")
+    else:
+        print(text)
+
+
+def write_issuer_csv(rows: List[IssuerSummary], out_path: Optional[str]) -> None:
+    if not out_path:
+        raise ValueError("--out is required when --format csv is used")
+
+    with open(out_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(
+            ["issuer_address", "trustline_objects", "discovered_currencies"]
+        )
+        for row in rows:
+            writer.writerow(
+                [row.issuer, row.trustline_objects, row.discovered_currencies]
+            )
+
+    print(f"[ok] wrote CSV to {out_path}")
+
+
+def validate_common_args(args: argparse.Namespace) -> int:
     if args.limit <= 0:
         eprint("[error] --limit must be > 0")
         return 2
@@ -307,6 +454,18 @@ def run_scan(args: argparse.Namespace) -> int:
     if args.limit > MAX_LIMIT:
         eprint(f"[warn] --limit capped from {args.limit} to {MAX_LIMIT}")
         args.limit = MAX_LIMIT
+
+    return 0
+
+
+def run_scan(args: argparse.Namespace) -> int:
+    if not args.issuer:
+        eprint("[error] requires --issuer")
+        return 2
+
+    rc = validate_common_args(args)
+    if rc != 0:
+        return rc
 
     client = make_client(args.rpc_url)
 
@@ -338,20 +497,72 @@ def run_scan(args: argparse.Namespace) -> int:
     eprint(f"[info] fetched {len(lines)} trust lines total")
 
     rows = aggregate_lines(args.issuer, lines)
-    rows = sort_results(rows, args.sort)
-    rows = filter_results(rows, args.min_trustlines, args.top)
+    rows = sort_asset_results(rows, args.sort)
+    rows = filter_asset_results(rows, args.min_trustlines, args.top)
 
     if args.format == "table":
-        print_table(rows)
+        print_asset_table(rows)
         return 0
 
     if args.format == "json":
-        write_json(rows, args.out)
+        write_asset_json(rows, args.out)
         return 0
 
     if args.format == "csv":
         try:
-            write_csv(rows, args.out)
+            write_asset_csv(rows, args.out)
+        except Exception as exc:
+            eprint(f"[error] failed to write CSV: {exc}")
+            return 1
+        return 0
+
+    eprint(f"[error] unsupported format: {args.format}")
+    return 2
+
+
+def run_scan_network(args: argparse.Namespace) -> int:
+    rc = validate_common_args(args)
+    if rc != 0:
+        return rc
+
+    client = make_client(args.rpc_url)
+
+    eprint(f"[info] rpc_url={args.rpc_url}")
+    eprint(f"[info] limit={args.limit}")
+    if args.max_pages:
+        eprint(f"[info] max_pages={args.max_pages}")
+    if args.min_trustlines:
+        eprint(f"[info] min_trustlines={args.min_trustlines}")
+    if args.top:
+        eprint(f"[info] top={args.top}")
+    eprint("[info] scanning network for issuers via RippleState...")
+
+    try:
+        rows = fetch_ripple_state_issuers(
+            client=client,
+            limit=args.limit,
+            retries=args.retries,
+            backoff=args.retry_backoff,
+            rate_limit_seconds=args.rate_limit,
+            max_pages=args.max_pages,
+        )
+    except Exception as exc:
+        eprint(f"[error] failed to scan network issuers: {exc}")
+        return 1
+
+    rows = filter_issuer_results(rows, args.min_trustlines, args.top)
+
+    if args.format == "table":
+        print_issuer_table(rows)
+        return 0
+
+    if args.format == "json":
+        write_issuer_json(rows, args.out)
+        return 0
+
+    if args.format == "csv":
+        try:
+            write_issuer_csv(rows, args.out)
         except Exception as exc:
             eprint(f"[error] failed to write CSV: {exc}")
             return 1
@@ -364,7 +575,7 @@ def run_scan(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="monitor.py",
-        description="XRPL Issuer / Trustline Scanner",
+        description="XRPL Issuer / Trustline Scanner v0.3",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -373,16 +584,7 @@ def build_parser() -> argparse.ArgumentParser:
         "scan",
         help="Scan trust-line assets for a given issuer",
     )
-    scan.add_argument(
-        "--issuer",
-        type=str,
-        help="Issuer account address (required)",
-    )
-    scan.add_argument(
-        "--issuer-only",
-        action="store_true",
-        help="Accepted for compatibility; scanner already operates in issuer-only mode",
-    )
+    scan.add_argument("--issuer", type=str, help="Issuer account address (required)")
     scan.add_argument(
         "--sort",
         choices=["trustlines", "holders", "currency"],
@@ -399,7 +601,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-pages",
         type=int,
         default=None,
-        help="Stop after this many pages (useful for very large issuers)",
+        help="Stop after this many pages",
     )
     scan.add_argument(
         "--min-trustlines",
@@ -450,6 +652,71 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Exponential retry backoff base (default: {DEFAULT_RETRY_BACKOFF})",
     )
 
+    network = subparsers.add_parser(
+        "scan-network",
+        help="Discover issuers from RippleState objects across XRPL",
+    )
+    network.add_argument(
+        "--limit",
+        type=int,
+        default=DEFAULT_LIMIT,
+        help=f"Page size per request (default: {DEFAULT_LIMIT})",
+    )
+    network.add_argument(
+        "--max-pages",
+        type=int,
+        default=5,
+        help="Stop after this many ledger_data pages",
+    )
+    network.add_argument(
+        "--min-trustlines",
+        type=int,
+        default=0,
+        help="Only include issuers with at least this many discovered trustline objects",
+    )
+    network.add_argument(
+        "--top",
+        type=int,
+        default=20,
+        help="Only show the top N issuers after filtering",
+    )
+    network.add_argument(
+        "--format",
+        choices=["table", "json", "csv"],
+        default="table",
+        help="Output format",
+    )
+    network.add_argument(
+        "--out",
+        type=str,
+        default=None,
+        help="Output file path (required for csv, optional for json)",
+    )
+    network.add_argument(
+        "--rpc-url",
+        type=str,
+        default=DEFAULT_RPC_URL,
+        help="XRPL JSON-RPC URL",
+    )
+    network.add_argument(
+        "--rate-limit",
+        type=float,
+        default=DEFAULT_RATE_LIMIT_SECONDS,
+        help=f"Seconds to sleep before each request (default: {DEFAULT_RATE_LIMIT_SECONDS})",
+    )
+    network.add_argument(
+        "--retries",
+        type=int,
+        default=DEFAULT_RETRIES,
+        help=f"Max retry attempts (default: {DEFAULT_RETRIES})",
+    )
+    network.add_argument(
+        "--retry-backoff",
+        type=float,
+        default=DEFAULT_RETRY_BACKOFF,
+        help=f"Exponential retry backoff base (default: {DEFAULT_RETRY_BACKOFF})",
+    )
+
     return parser
 
 
@@ -459,6 +726,9 @@ def main() -> int:
 
     if args.command == "scan":
         return run_scan(args)
+
+    if args.command == "scan-network":
+        return run_scan_network(args)
 
     eprint(f"[error] unknown command: {args.command}")
     return 2
