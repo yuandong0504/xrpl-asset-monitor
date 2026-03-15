@@ -1,55 +1,51 @@
 # XRPL Issuer / Trustline Scanner
 
-A lightweight CLI tool for exploring issued assets on XRPL.
+A lightweight CLI tool for exploring issued assets on the XRP Ledger.
 
-v0.1 focuses on **issuer-only trust-line asset scanning**.
+This tool scans trust lines for a given issuer account and aggregates assets by currency.
 
-It aggregates trust lines by **issuer + currency** and outputs:
+It outputs:
 
 - issuer address
 - currency code
 - trustlines count
 - unique holders
 
----
 
-## Quick Scan Demo
+## Why this tool
 
-### Install
+Existing XRPL explorers (XRPSCAN, Bithomp) allow browsing tokens, but they are not designed for:
 
-    pip install -r requirements.txt
+- quick CLI analysis
+- batch export of issuer assets
+- automated research workflows
 
-### Run a scan
+Developers and researchers often need a simple way to inspect issuer assets directly from the command line.
 
-    python3 monitor.py scan --issuer rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh
 
-Replace the issuer address with any valid XRPL issuer account.
+## Example
 
-### Export JSON
+Scan an issuer:
 
-    python3 monitor.py scan \
-      --issuer rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh \
-      --format json \
-      --out results.json
+    python3 monitor.py scan --issuer rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq --max-pages 3
 
-### Export CSV
 
-    python3 monitor.py scan \
-      --issuer rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh \
-      --format csv \
-      --out results.csv
-
-### Example Output
+Example output:
 
     Issuer Address                      Currency Code           Trustlines Count    Unique Holders
     ----------------------------------------------------------------------------------------------
-    rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh  CNY                                   59                59
-    rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh  USD                                   39                39
-    rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh  RLUSD                                  6                 6
- 
+    rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq  EUR                                  309               309
+    rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq  USD                                  291               291
+
+
+## Installation
+
+    pip install -r requirements.txt
+
+
 ## Usage
 
-Scan an issuer:
+Scan issuer assets:
 
     python3 monitor.py scan --issuer r...
 
@@ -65,11 +61,41 @@ Limit results:
       --issuer r... \
       --top 10
 
-## Notes
+Export JSON:
 
-- v0.1 uses XRPL `account_lines`
-- v0.1 is issuer-only scanning
-- future versions may add:
-  - DEX data
-  - volume
-  - activity tracking
+    python3 monitor.py scan \
+      --issuer r... \
+      --format json \
+      --out results.json
+
+Export CSV:
+
+    python3 monitor.py scan \
+      --issuer r... \
+      --format csv \
+      --out results.csv
+
+
+## Current Features
+
+- issuer trustline scanning
+- asset aggregation by currency
+- trustline holder counts
+- CSV / JSON export
+- filtering (`--min-trustlines`)
+- top results (`--top`)
+- pagination control (`--max-pages`)
+
+
+## Roadmap
+
+Possible future improvements:
+
+- network-wide issuer discovery
+- XRPL DEX activity integration
+- asset analytics
+
+
+## License
+
+MIT
