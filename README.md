@@ -2,33 +2,35 @@
 
 A lightweight CLI tool for exploring issued assets on the XRP Ledger.
 
-This tool scans trust lines for a given issuer account and aggregates assets by currency.
+The tool can:
 
-It outputs:
-
-- issuer address
-- currency code
-- trustlines count
-- unique holders
+- scan assets for a single issuer
+- discover issuers across the XRPL network
+- aggregate trustlines by currency
+- export results to JSON or CSV
 
 
-## Why this tool
+## Why this tool exists
 
-Existing XRPL explorers (XRPSCAN, Bithomp) allow browsing tokens, but they are not designed for:
+XRPL explorers like XRPSCAN and Bithomp are useful for browsing tokens, but they are not designed for:
 
-- quick CLI analysis
-- batch export of issuer assets
+- command-line analysis
 - automated research workflows
+- batch export of issuer asset data
 
-Developers and researchers often need a simple way to inspect issuer assets directly from the command line.
+This tool provides a simple CLI interface for inspecting issuer assets and discovering token issuers directly from XRPL.
 
 
-## Example
+## Installation
 
-Scan an issuer:
+    pip install -r requirements.txt
+
+
+## Scan a single issuer
+
+Example:
 
     python3 monitor.py scan --issuer rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq --max-pages 3
-
 
 Example output:
 
@@ -38,28 +40,19 @@ Example output:
     rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq  USD                                  291               291
 
 
-## Installation
-
-    pip install -r requirements.txt
-
-
-## Usage
-
-Scan issuer assets:
-
-    python3 monitor.py scan --issuer r...
-
 Filter small assets:
 
     python3 monitor.py scan \
       --issuer r... \
       --min-trustlines 50
 
-Limit results:
+
+Limit output:
 
     python3 monitor.py scan \
       --issuer r... \
       --top 10
+
 
 Export JSON:
 
@@ -67,6 +60,7 @@ Export JSON:
       --issuer r... \
       --format json \
       --out results.json
+
 
 Export CSV:
 
@@ -76,24 +70,40 @@ Export CSV:
       --out results.csv
 
 
+## Discover issuers across XRPL
+
+The tool can scan RippleState objects from the ledger to discover issuers.
+
+Example:
+
+    python3 monitor.py scan-network --max-pages 3
+
+
+Example output:
+
+    Issuer Address                      Trustline Objects    Discovered Currencies
+    -------------------------------------------------------------------------------
+    rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq                  600                        2
+    rxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx                  520                        4
+
+
+Export issuer list:
+
+    python3 monitor.py scan-network \
+      --format json \
+      --out issuers.json
+
+
 ## Current Features
 
 - issuer trustline scanning
+- network issuer discovery
 - asset aggregation by currency
 - trustline holder counts
-- CSV / JSON export
-- filtering (`--min-trustlines`)
-- top results (`--top`)
-- pagination control (`--max-pages`)
-
-
-## Roadmap
-
-Possible future improvements:
-
-- network-wide issuer discovery
-- XRPL DEX activity integration
-- asset analytics
+- filtering with `--min-trustlines`
+- result limiting with `--top`
+- pagination control with `--max-pages`
+- JSON / CSV export
 
 
 ## License
