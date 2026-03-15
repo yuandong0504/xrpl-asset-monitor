@@ -1,111 +1,159 @@
-# XRPL Issuer / Trustline Scanner
+# XRPL Asset Monitor
 
 A lightweight CLI tool for exploring issued assets on the XRP Ledger.
 
-The tool can:
+This tool helps developers and researchers inspect XRPL token activity from the command line.
 
-- scan assets for a single issuer
-- discover issuers across the XRPL network
-- aggregate trustlines by currency
-- export results to JSON or CSV
+Capabilities:
+
+- Scan assets issued by a specific account
+- Discover issuers across the XRPL network
+- Rank assets by trustline count
+- Rank issuers by trustline objects
+- Export results for analysis
 
 
-## Why this tool exists
+--------------------------------------------------
+
+WHY THIS TOOL EXISTS
 
 XRPL explorers like XRPSCAN and Bithomp are useful for browsing tokens, but they are not designed for:
 
-- command-line analysis
-- automated research workflows
-- batch export of issuer asset data
+- command-line workflows
+- automation
+- bulk analysis
+- quick issuer discovery
 
-This tool provides a simple CLI interface for inspecting issuer assets and discovering token issuers directly from XRPL.
-
-
-## Installation
-
-    pip install -r requirements.txt
+This tool provides a simple CLI interface for exploring XRPL token activity.
 
 
-## Scan a single issuer
+--------------------------------------------------
 
-Example:
+INSTALLATION
 
-    python3 monitor.py scan --issuer rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq --max-pages 3
+Clone the repository and install dependencies:
+
+pip install -r requirements.txt
+
+(Optional) create a shell alias:
+
+alias xrpl="python3 ~/xrpl-asset-monitor/monitor.py"
+
+
+--------------------------------------------------
+
+COMMANDS
+
+
+1. Scan assets from a single issuer
+
+xrpl scan --issuer rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh
 
 Example output:
 
-    Issuer Address                      Currency Code           Trustlines Count    Unique Holders
-    ----------------------------------------------------------------------------------------------
-    rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq  EUR                                  309               309
-    rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq  USD                                  291               291
+Issuer Address                      Currency Code          Trustlines Count   Unique Holders
+----------------------------------------------------------------------------------------------
+rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh CNY                                  59               59
+rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh USD                                  39               39
+rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh RLUSD                                 6                6
 
 
-Filter small assets:
+Filter assets:
 
-    python3 monitor.py scan \
-      --issuer r... \
-      --min-trustlines 50
-
+xrpl scan --issuer r... --min-trustlines 50
 
 Limit output:
 
-    python3 monitor.py scan \
-      --issuer r... \
-      --top 10
+xrpl scan --issuer r... --top 10
 
 
-Export JSON:
+--------------------------------------------------
 
-    python3 monitor.py scan \
-      --issuer r... \
-      --format json \
-      --out results.json
+2. Discover issuers across XRPL
 
+Scan RippleState objects to discover asset issuers.
 
-Export CSV:
-
-    python3 monitor.py scan \
-      --issuer r... \
-      --format csv \
-      --out results.csv
-
-
-## Discover issuers across XRPL
-
-The tool can scan RippleState objects from the ledger to discover issuers.
-
-Example:
-
-    python3 monitor.py scan-network --max-pages 3
-
+xrpl scan-network --max-pages 5
 
 Example output:
 
-    Issuer Address                      Trustline Objects    Discovered Currencies
-    -------------------------------------------------------------------------------
-    rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq                  600                        2
-    rxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx                  520                        4
+Issuer Address                      Trustline Objects    Discovered Currencies
+-----------------------------------------------------------------------------
+rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz                  4                     1
+rUQXurByxmKni4aLpuWMYMxxV5GWT1Azw2                  2                     1
 
 
-Export issuer list:
+--------------------------------------------------
 
-    python3 monitor.py scan-network \
-      --format json \
-      --out issuers.json
+3. Top assets across the network
+
+Rank currencies by number of discovered trustlines.
+
+xrpl top-assets --limit 20
+
+Example output:
+
+Asset      Trustlines
+-----------------------
+SOLO       15
+BTC        8
+ELS        7
+USD        6
+CNY        5
 
 
-## Current Features
+NOTE
 
-- issuer trustline scanning
-- network issuer discovery
-- asset aggregation by currency
-- trustline holder counts
-- filtering with `--min-trustlines`
-- result limiting with `--top`
-- pagination control with `--max-pages`
-- JSON / CSV export
+Results are based on a partial ledger scan.
+Increase max-pages to analyze more ledger data.
 
 
-## License
+--------------------------------------------------
+
+4. Top issuers
+
+Rank issuers by trustline objects discovered in the ledger.
+
+xrpl top-issuers --limit 10 --max-pages 10
+
+Example output:
+
+Issuer Address                      Trustline Objects
+-----------------------------------------------------
+rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz   4
+rUQXurByxmKni4aLpuWMYMxxV5GWT1Azw2   2
+
+
+--------------------------------------------------
+
+NOTES
+
+XRPL uses two currency formats:
+
+Standard codes
+USD, EUR, BTC
+
+160-bit currency codes
+hex encoded tokens
+
+The tool attempts to decode hex codes when possible.
+
+
+--------------------------------------------------
+
+USE CASES
+
+Possible applications:
+
+- XRPL token research
+- issuer discovery
+- DeFi asset analysis
+- token index building
+- XRPL ecosystem monitoring
+
+
+--------------------------------------------------
+
+LICENSE
 
 MIT
