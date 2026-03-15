@@ -99,17 +99,24 @@ def fetch_account_lines(
     backoff: float,
     rate_limit_seconds: float,
     max_pages: Optional[int] = None,
-    min_trustlines: int = 0,  # 新增参数
+    min_trustlines: int = 0,
 ) -> List[Dict[str, Any]]:
     marker: Optional[str] = None
     all_lines: List[Dict[str, Any]] = []
     page = 0
-    stats: Dict[str, int] = {}  # 实时统计每个货币的信任线数量
+    stats: Dict[str, int] = {}
 
-    print(f"[info] 开始扫描，目标min_trustlines={min_trustlines}")
+    print(f"[info] Scanning started, target min_trustlines={min_trustlines}")
+    print(f"[info] Max pages limit: {max_pages or 'unlimited'}")
     
     while True:
         page += 1
+        
+        # Strict max pages enforcement
+        if max_pages is not None and page > max_pages:
+            print(f"[info] Reached max pages limit {max_pages}, stopping")
+            break
+            
         req = AccountLines(
             account=issuer,
             ledger_index="validated",
@@ -126,9 +133,13 @@ def fetch_account_lines(
         )
         
         lines = result.get("lines", [])
+        if not lines:
+            print("[info] No more data, scan complete")
+            break
+            
         all_lines.extend(lines)
         
-        # 实时统计
+        # Real-time stats
         for line in lines:
             currency_raw = line.get("currency", "UNKNOWN")
             currency = normalize_currency(currency_raw)
@@ -137,25 +148,16 @@ def fetch_account_lines(
         total_lines = len(all_lines)
         qualified_assets = sum(1 for count in stats.values() if count >= min_trustlines)
         
-        print(f"[info] page {page}: {len(lines)} lines (总计 {total_lines:,}) | "
-              f"合格资产: {qualified_assets} (>= {min_trustlines}) | "
-              f"资产种类: {len(stats)}")
+        print(f"[info] page {page}: {len(lines)} lines (total {total_lines:,}) | "
+              f"qualified assets: {qualified_assets} (>= {min_trustlines}) | "
+              f"asset types: {len(stats)}")
         
-        # 🔥 智能停止条件
         marker = result.get("marker")
-        if max_pages and page >= max_pages:
-            print(f"[info] 达到最大页数 {max_pages}，提前停止")
-            break
         if not marker:
-            print("[info] 无更多分页，扫描完成")
-            break
-        
-        # 🚀 如果找到足够合格资产，提前停止（避免无限抓取）
-        if qualified_assets >= 10 and total_lines > 2000:  # 可调整阈值
-            print(f"[info] 已找到 {qualified_assets} 个合格资产，自动停止分页")
+            print("[info] No more pages, scan complete")
             break
 
-    print(f"[ok] 扫描完成！总信任线: {len(all_lines):,}，合格资产: {qualified_assets}")
+    print(f"[ok] Scan complete! Total trustlines: {len(all_lines):,}, qualified assets: {qualified_assets}")
     return all_lines
 
 def aggregate_lines(issuer: str, lines: List[Dict[str, Any]]) -> List[AssetStats]:
@@ -464,7 +466,7 @@ def validate_common_args(args: argparse.Namespace) -> int:
 
 def run_scan(args: argparse.Namespace) -> int:
     if not args.issuer:
-        eprint("[error] requires --issuer")
+        eprint("[error] --issuer is required")
         return 2
 
     rc = validate_common_args(args)
@@ -473,19 +475,18 @@ def run_scan(args: argparse.Namespace) -> int:
 
     client = make_client(args.rpc_url)
     
-    eprint(f"[info] rpc_url={args.rpc_url}")
-    eprint(f"[info] issuer={args.issuer}")
-    eprint(f"[info] limit={args.limit}")
+    print(f"[info] RPC: {args.rpc_url}")
+    print(f"[info] Target issuer: {args.issuer}")
+    print(f"[info] Page limit: {args.limit}")
+    print(f"[info] Min trustlines: {args.min_trustlines}")
     if args.max_pages:
-        eprint(f"[info] max_pages={args.max_pages}")
-    if args.min_trustlines:
-        eprint(f"[info] min_trustlines={args.min_trustlines}")
+        print(f"[info] Max pages: {args.max_pages}")
     if args.top:
-        eprint(f"[info] top={args.top}")
-    eprint("[info] fetching trust lines...")
-
+        print(f"[info] Top results: {args.top}")
+    
+    print("[info] Fetching trustlines...")
+    
     try:
-        # 在 run_scan 函数中修改调用
         lines = fetch_account_lines(
             client=client,
             issuer=args.issuer,
@@ -494,14 +495,16 @@ def run_scan(args: argparse.Namespace) -> int:
             backoff=args.retry_backoff,
             rate_limit_seconds=args.rate_limit,
             max_pages=args.max_pages,
-            min_trustlines=args.min_trustlines,  # 传入参数
+            min_trustlines=args.min_trustlines,
         )
-
+    except KeyboardInterrupt:
+        print("\n[warn] Scan interrupted by user")
+        return 130
     except Exception as exc:
-        eprint(f"[error] failed to fetch account lines: {exc}")
+        eprint(f"[error] Failed to fetch trustlines: {exc}")
         return 1
 
-    eprint(f"[info] fetched {len(lines)} trust lines total")
+    print(f"[info] Total trustlines fetched: {len(lines):,}")
 
     rows = aggregate_lines(args.issuer, lines)
     rows = sort_asset_results(rows, args.sort)
