@@ -376,9 +376,14 @@ Command used:
 ```bash
 xrpl scan \
   --issuer rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz \
+  --limit 400 \
+  --rate-limit 0.05 \
+  --rpc-url https://xrplcluster.com \
   --max-pages 0 \
+  --min-trustlines 50 \
   --format csv \
-  --out solo_assets.csv
+  --out solo_assets.csv \
+  --resume solo_scan.stat
 ```
 
 Result:
