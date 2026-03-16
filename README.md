@@ -82,7 +82,8 @@ xrpl scan-network \
 
 ```bash
 xrpl top-assets \
-  --limit 20
+  --limit 20 \
+  --max-pages 300
 ```
 
 ---
