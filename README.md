@@ -274,6 +274,82 @@ This helps answer questions like:
 - XRPL data export for quantitative analysis
 
 ---
+## Case Study: Detecting Token Impersonation on XRPL
+
+This tool can reveal token impersonation patterns that are difficult to detect through typical web explorers.
+
+### Example: Sologenic issuer analysis
+
+Run a deep scan of the Sologenic issuer:
+
+```bash
+xrpl scan \
+  --issuer rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz \
+  --max-pages 999
+```
+
+Example result (simplified):
+
+```
+Currency   Trustlines
+-------------------------
+SOLO       198717
+SOL           775
+sol           202
+Sol            22
+SOL@            5
+SLO             4
+T?LO            4
+SO<O            1
+SOLOO           1
+```
+
+### Interpretation
+
+Although 32 currency codes exist under the same issuer address, only one token shows real adoption:
+
+```
+SOLO → 198,717 trustlines
+```
+
+All other variants have extremely small holder counts.
+
+Examples include:
+
+```
+SOL
+sol
+Sol
+SOL@
+SLO
+SOLOO
+```
+
+These are likely:
+
+- user mistakes
+- token impersonation attempts
+- experimental tokens
+- abandoned assets
+
+### Insight
+
+Deep issuer scans allow researchers to identify:
+
+- impersonation tokens
+- abandoned assets
+- naming collisions
+- user confusion patterns
+
+This type of analysis is difficult to perform using standard XRPL web explorers, which typically display assets individually rather than analyzing the full issuer ecosystem.
+
+### Why this matters
+
+XRPL allows issuers to create many currency codes under a single account.
+
+Large issuers may accumulate dozens of token variations over time.
+
+Analyzing trustline distribution helps identify which assets have real adoption and which are noise or impersonation attempts.
 
 ## License
 
