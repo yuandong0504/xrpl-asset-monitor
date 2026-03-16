@@ -265,6 +265,95 @@ This helps answer questions like:
 - Which issuers control the largest ecosystems?
 - How quickly is XRPL expanding?
 
+---
+
+### 7 Analyze issuer ecosystem health
+
+```bash
+xrpl issuer-health --issuer <issuer_address>
+```
+
+Optional (faster scan):
+
+```bash
+xrpl issuer-health \
+  --issuer <issuer_address> \
+  --max-pages 20
+```
+
+What this shows
+
+- Real tokens issued by the project
+- Minor tokens with limited usage
+- Noise / spam tokens
+- An overall Ecosystem Health Score
+
+Example insight
+
+```
+Real tokens : 1
+Minor tokens: 3
+Noise tokens: 28
+
+Ecosystem Health Score: 0.92
+```
+
+Interpretation
+
+A healthy issuer ecosystem typically has:
+
+- One dominant real token
+- A few minor variants
+- Many low-usage noise tokens
+
+This pattern appears frequently on XRPL and can help identify impersonation attempts or token spam.
+
+---
+
+### 8 Analyze whale concentration
+
+```bash
+xrpl whale-concentration \
+  --issuer <issuer_address> \
+  --token <currency_code>
+```
+
+Optional (limit scan size):
+
+```bash
+xrpl whale-concentration \
+  --issuer <issuer_address> \
+  --token SOLO \
+  --max-pages 50
+```
+
+What this shows
+
+- Token distribution among holders
+- Concentration of supply in top wallets
+
+Example output
+
+```
+Whale Concentration Report
+
+Token: SOLO
+Issuer: rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz
+Total holders scanned: 198,717
+
+Top 10 holders  : 38.42%
+Top 50 holders  : 52.17%
+Top 100 holders : 61.33%
+Top 500 holders : 78.90%
+```
+
+Interpretation
+
+- High concentration → supply controlled by a few wallets
+- Low concentration → broader token distribution
+
+This helps evaluate whether a token ecosystem is decentralized or dominated by whales.
+
 ## Use Cases
 
 - DeFi research  
