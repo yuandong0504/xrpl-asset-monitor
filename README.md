@@ -363,83 +363,57 @@ This helps evaluate whether a token ecosystem is decentralized or dominated by w
 - XRPL data export for quantitative analysis
 
 ---
-## Case Study: Detecting Token Impersonation on XRPL
+# Case Study: Analyzing the Sologenic Issuer
 
-This tool can reveal token impersonation patterns that are difficult to detect through typical web explorers.
+Issuer:
 
-### Example: Sologenic issuer analysis
+```
+rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz
+```
 
-Run a deep scan of the Sologenic issuer:
+Command used:
 
 ```bash
 xrpl scan \
   --issuer rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz \
-  --max-pages 999
+  --max-pages 0 \
+  --format csv \
+  --out solo_assets.csv
 ```
 
-Example result (simplified):
+Result:
 
 ```
-Currency   Trustlines
--------------------------
-SOLO       198717
-SOL           775
-sol           202
-Sol            22
-SOL@            5
-SLO             4
-T?LO            4
-SO<O            1
-SOLOO           1
+716 pages | 286,282 trustlines | 67 asset types | 12m 50s
 ```
 
-### Interpretation
+Findings:
 
-Although 32 currency codes exist under the same issuer address, only one token shows real adoption:
+| Currency | Trustlines | Interpretation |
+|--------|-----------|---------------|
+| SOLO | 284,763 | Real adoption |
+| SOL | 1,057 | Name collision |
+| sol | 302 | Case variant |
+| (64 others) | <50 each | Noise / impersonation |
 
-```
-SOLO → 198,717 trustlines
-```
+Key Insight
 
-All other variants have extremely small holder counts.
+**99.5% of all trustlines belong to SOLO.**
 
-Examples include:
+The remaining 66 currency codes represent:
 
-```
-SOL
-sol
-Sol
-SOL@
-SLO
-SOLOO
-```
-
-These are likely:
-
-- user mistakes
-- token impersonation attempts
-- experimental tokens
-- abandoned assets
-
-### Insight
-
-Deep issuer scans allow researchers to identify:
-
-- impersonation tokens
-- abandoned assets
 - naming collisions
-- user confusion patterns
+- case variants
+- abandoned tokens
+- impersonation attempts
 
-This type of analysis is difficult to perform using standard XRPL web explorers, which typically display assets individually rather than analyzing the full issuer ecosystem.
+All of these exist under the same issuer address.
 
-### Why this matters
+This pattern — **one dominant token surrounded by many noise tokens** — is common across XRPL issuers but difficult to detect using standard web explorers.
 
-XRPL allows issuers to create many currency codes under a single account.
+XRPL Asset Monitor reveals these structures directly from ledger data.
 
-Large issuers may accumulate dozens of token variations over time.
-
-Analyzing trustline distribution helps identify which assets have real adoption and which are noise or impersonation attempts.
-
+---
 ## License
 
 MIT
