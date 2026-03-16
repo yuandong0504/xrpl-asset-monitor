@@ -9,6 +9,7 @@ import csv
 import json
 import sys
 import time
+from collections import defaultdict
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -189,6 +190,195 @@ def aggregate_lines(issuer: str, lines: List[Dict[str, Any]]) -> List[AssetStats
             )
         )
     return results
+
+def run_issuer_health(args: argparse.Namespace) -> int:
+    client = make_client(args.rpc_url)
+
+    issuer = args.issuer
+    marker = None
+    limit = args.limit
+
+    asset_counts = defaultdict(int)
+
+    page = 0
+    total_scanned = 0
+
+    print(f"[info] scanning issuer ecosystem: {issuer} | limit={limit}")
+
+    while True:
+        page += 1
+        print(f"[info] issuer-health page {page}: requesting...", flush=True)
+
+        req = AccountLines(
+            account=issuer,
+            ledger_index="validated",
+            limit=limit,
+            marker=marker,
+        )
+
+        result = request_with_retry(
+            client,
+            req,
+            args.retries,
+            args.retry_backoff,
+            args.rate_limit,
+        )
+
+        lines = result.get("lines", [])
+
+        for line in lines:
+            currency = normalize_currency(line.get("currency", "UNKNOWN"))
+            asset_counts[currency] += 1
+
+        total_scanned += len(lines)
+
+        print(
+            f"[info] issuer-health page {page}: +{len(lines)} lines | "
+            f"tokens so far: {len(asset_counts)} | total scanned: {total_scanned}",
+            flush=True,
+        )
+
+        marker = result.get("marker")
+
+        if not marker:
+            print("[ok] All pages scanned")
+            break
+        if args.max_pages and page >= args.max_pages:
+            print(f"[info] reached max-pages={args.max_pages}, stopping early")
+            break
+
+    real_tokens = []
+    minor_tokens = []
+    noise_tokens = []
+
+    for currency, count in asset_counts.items():
+        if count >= 1000:
+            real_tokens.append((currency, count))
+        elif count >= 10:
+            minor_tokens.append((currency, count))
+        else:
+            noise_tokens.append((currency, count))
+
+    total = len(asset_counts)
+    health_score = round(len(real_tokens) / total, 3) if total else 0.0
+
+    print("\nIssuer Ecosystem Health\n")
+
+    print(f"Issuer: {issuer}")
+    print(f"Total tokens discovered: {total}\n")
+
+    print("Real Tokens (>=1000 trustlines)")
+    print("--------------------------------")
+    for c, n in sorted(real_tokens, key=lambda x: -x[1]):
+        print(f"{c:<15} {n}")
+
+    print("\nMinor Tokens (10-999 trustlines)")
+    print("--------------------------------")
+    for c, n in sorted(minor_tokens, key=lambda x: -x[1]):
+        print(f"{c:<15} {n}")
+
+    print("\nNoise Tokens (<10 trustlines)")
+    print("-----------------------------")
+    for c, n in sorted(noise_tokens, key=lambda x: -x[1]):
+        print(f"{c:<15} {n}")
+
+    print("\nEcosystem Health Score")
+    print("----------------------")
+    print(health_score)
+
+    return 0
+
+def run_whale_concentration(args: argparse.Namespace) -> int:
+    client = make_client(args.rpc_url)
+
+    issuer = args.issuer
+    token = args.token
+    limit = args.limit
+
+    marker = None
+    balances = []
+    total_lines = 0
+    page = 0
+
+    print(
+        f"[info] scanning holders for {token}:{issuer} "
+        f"| limit={limit} | rate-limit={args.rate_limit}s",
+        flush=True,
+    )
+
+    while True:
+        page += 1
+        print(f"[info] whale page {page}: requesting...", flush=True)
+
+        req = AccountLines(
+            account=issuer,
+            ledger_index="validated",
+            limit=limit,
+            marker=marker,
+        )
+
+        result = request_with_retry(
+            client,
+            req,
+            args.retries,
+            args.retry_backoff,
+            args.rate_limit,
+        )
+
+        lines = result.get("lines", [])
+        total_lines += len(lines)
+
+        added = 0
+        for line in lines:
+            currency = normalize_currency(line.get("currency", ""))
+            if currency != token:
+                continue
+
+            try:
+                balance = abs(float(line.get("balance", 0)))
+            except (TypeError, ValueError):
+                continue
+
+            if balance > 0:
+                balances.append(balance)
+                added += 1
+
+        print(
+            f"[info] whale page {page}: +{len(lines)} lines | "
+            f"matched {token}: +{added} | holders so far: {len(balances):,} | "
+            f"total scanned: {total_lines:,}",
+            flush=True,
+        )
+
+        marker = result.get("marker")
+        if not marker:
+            print("[ok] All pages scanned", flush=True)
+            break
+        if args.max_pages and page >= args.max_pages:
+            print(f"[info] reached max-pages={args.max_pages}, stopping early")
+            break
+
+    if not balances:
+        print("No holders found.")
+        return 0
+
+    balances.sort(reverse=True)
+    total_balance = sum(balances)
+
+    def concentration(n: int) -> float:
+        top_sum = sum(balances[:n])
+        return round((top_sum / total_balance) * 100, 2) if total_balance else 0.0
+
+    print("\nWhale Concentration Report")
+    print(f"Token: {token}")
+    print(f"Issuer: {issuer}")
+    print(f"Total holders scanned: {len(balances):,}")
+    print(f"Top 10 holders  : {concentration(10)}%")
+    print(f"Top 50 holders  : {concentration(50)}%")
+    print(f"Top 100 holders : {concentration(100)}%")
+    print(f"Top 500 holders : {concentration(500)}%")
+
+    return 0 
 
 def sort_asset_results(rows: List[AssetStats], sort_by: str) -> List[AssetStats]:
     if sort_by == "trustlines":
@@ -732,7 +922,93 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_RETRY_BACKOFF,
         help=f"Exponential retry backoff base (default: {DEFAULT_RETRY_BACKOFF})",
     )
+    # issuer-health
+    parser_health = subparsers.add_parser(
+        "issuer-health",
+        help="Analyze issuer ecosystem health",
+    )
+    parser_health.add_argument("--issuer", required=True)
+    parser_health.add_argument(
+        "--rpc-url",
+        type=str,
+        default=DEFAULT_RPC_URL,
+        help="XRPL JSON-RPC URL",
+    )
+    parser_health.add_argument(
+        "--limit",
+        type=int,
+        default=DEFAULT_LIMIT,
+        help="Page size per request",
+    )
+    parser_health.add_argument(
+        "--max-pages",
+        type=int,
+        default=None,
+        help="Stop after N pages (for faster scan)",
+    )
+    parser_health.add_argument(
+        "--rate-limit",
+        type=float,
+        default=DEFAULT_RATE_LIMIT_SECONDS,
+        help=f"Seconds to sleep before each request (default: {DEFAULT_RATE_LIMIT_SECONDS})",
+    )
+    parser_health.add_argument(
+        "--retries",
+        type=int,
+        default=DEFAULT_RETRIES,
+        help=f"Max retry attempts (default: {DEFAULT_RETRIES})",
+    )
+    parser_health.add_argument(
+        "--retry-backoff",
+        type=float,
+        default=DEFAULT_RETRY_BACKOFF,
+        help=f"Exponential retry backoff base (default: {DEFAULT_RETRY_BACKOFF})",
+    )
 
+    # whale-concentration
+    parser_whale = subparsers.add_parser(
+        "whale-concentration",
+        help="Analyze whale concentration for a token",
+    )
+    parser_whale.add_argument("--issuer", required=True)
+    parser_whale.add_argument("--token", required=True)
+    parser_whale.add_argument(
+        "--rpc-url",
+        type=str,
+        default=DEFAULT_RPC_URL,
+        help="XRPL JSON-RPC URL",
+    )
+    parser_whale.add_argument(
+        "--limit",
+        type=int,
+        default=DEFAULT_LIMIT,
+        help="Page size per request",
+    )
+    parser_whale.add_argument(
+        "--max-pages",
+        type=int,
+        default=None,
+        help="Stop after N pages (for faster scan)",
+    )
+    parser_whale.add_argument(
+        "--rate-limit",
+        type=float,
+        default=DEFAULT_RATE_LIMIT_SECONDS,
+        help=f"Seconds to sleep before each request (default: {DEFAULT_RATE_LIMIT_SECONDS})",
+    )
+    parser_whale.add_argument(
+        "--retries",
+        type=int,
+        default=DEFAULT_RETRIES,
+        help=f"Max retry attempts (default: {DEFAULT_RETRIES})",
+    )
+    parser_whale.add_argument(
+        "--retry-backoff",
+        type=float,
+        default=DEFAULT_RETRY_BACKOFF,
+        help=f"Exponential retry backoff base (default: {DEFAULT_RETRY_BACKOFF})",
+    )
+    
     # top-assets
     top_assets = subparsers.add_parser(
         "top-assets",
@@ -839,6 +1115,10 @@ def main() -> int:
         return run_scan(args)
     elif args.command == "scan-network":
         return run_scan_network(args)
+    elif args.command == "issuer-health":
+        return run_issuer_health(args)
+    elif args.command == "whale-concentration":
+        return run_whale_concentration(args)
     elif args.command == "top-assets":
         return run_top_assets(args)
     elif args.command == "top-issuers":
