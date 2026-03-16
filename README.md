@@ -419,6 +419,61 @@ This pattern — **one dominant token surrounded by many noise tokens** — is c
 XRPL Asset Monitor reveals these structures directly from ledger data.
 
 ---
+## Case Study: SOLO Whale Concentration Analysis
+
+Issuer:
+
+```
+rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz
+```
+
+Command used:
+
+```bash
+xrpl whale-concentration \
+  --issuer rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz \
+  --token SOLO \
+  --limit 400 \
+  --rate-limit 0.05 \
+  --rpc-url https://xrplcluster.com \
+  --max-pages 0 \
+  --top-holders 20 \
+  --resume solo_whale.state
+```
+
+Result:
+
+```
+217,005 holders | Total supply: 262,506,914 SOLO | 13m 01s
+```
+
+Distribution:
+
+| Cohort | Holdings |
+|------|---------|
+| Top 10 | 44.84% |
+| Top 50 | 56.55% |
+| Top 100 | 60.74% |
+| Top 500 | 72.17% |
+
+Key insight:
+
+The largest single holder controls **16.43% of the circulating supply**  
+(≈43 million SOLO).
+
+This address alone holds **more tokens than holders #2 through #10 combined**.
+
+This represents a **super-whale concentration structure**, which has important implications for:
+
+- token liquidity
+- governance risk
+- DeFi collateralization
+- institutional participation
+
+For developers building on XRPL (RWA protocols, lending platforms, AMMs),  
+understanding whale concentration is critical when evaluating asset stability.
+
+XRPL Asset Monitor enables this analysis directly from **trustline ledger data**, without relying on third-party analytics platforms.
 ## License
 
 MIT
