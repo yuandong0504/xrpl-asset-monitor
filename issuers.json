@@ -1,0 +1,102 @@
+[
+  {
+    "issuer": "rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz",
+    "trustline_objects": 64,
+    "discovered_currencies": 1
+  },
+  {
+    "issuer": "rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq",
+    "trustline_objects": 39,
+    "discovered_currencies": 2
+  },
+  {
+    "issuer": "rHXuEaRYnnJHbDeuBH5w8yPh5uwNVh5zAg",
+    "trustline_objects": 28,
+    "discovered_currencies": 3
+  },
+  {
+    "issuer": "rchGBxcD1A1C2tdxF6papQYZ8kjRKMYcL",
+    "trustline_objects": 24,
+    "discovered_currencies": 1
+  },
+  {
+    "issuer": "rcA8X3TVMST1n3CJeAdGk1RdRCHii7N2h",
+    "trustline_objects": 15,
+    "discovered_currencies": 1
+  },
+  {
+    "issuer": "rCSCManTZ8ME9EoLrSHHYKW8PPwWMgkwr",
+    "trustline_objects": 13,
+    "discovered_currencies": 1
+  },
+  {
+    "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+    "trustline_objects": 13,
+    "discovered_currencies": 1
+  },
+  {
+    "issuer": "rBfVgTnsdh8ckC19RM8aVGNuMZnpwrMP6n",
+    "trustline_objects": 11,
+    "discovered_currencies": 5
+  },
+  {
+    "issuer": "rcoreNywaoz2ZCQ8Lg2EbSLnGuRBmun6D",
+    "trustline_objects": 11,
+    "discovered_currencies": 1
+  },
+  {
+    "issuer": "rKiCet8SdvWxPXnAgYarFUXMh1zCPz432Y",
+    "trustline_objects": 10,
+    "discovered_currencies": 2
+  },
+  {
+    "issuer": "rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B",
+    "trustline_objects": 10,
+    "discovered_currencies": 2
+  },
+  {
+    "issuer": "r3dVizzUAS3U29WKaaSALqkieytA2LCoRe",
+    "trustline_objects": 10,
+    "discovered_currencies": 1
+  },
+  {
+    "issuer": "rNdwi8ain5ibXNB9A7H3zzKtSxgVzAqqAe",
+    "trustline_objects": 10,
+    "discovered_currencies": 1
+  },
+  {
+    "issuer": "rcxJwVnftZzXqyH9YheB8TgeiZUhNo1Eu",
+    "trustline_objects": 10,
+    "discovered_currencies": 1
+  },
+  {
+    "issuer": "rBdZkMKuPnzYVVkyL2DrQKV3DsYt5PPVRh",
+    "trustline_objects": 8,
+    "discovered_currencies": 1
+  },
+  {
+    "issuer": "rDFXbW2ZZCG5WgPtqwNiA2xZokLMm9ivmN",
+    "trustline_objects": 8,
+    "discovered_currencies": 1
+  },
+  {
+    "issuer": "rKk7mu1dNB25fsPEJ4quoQd5B8QmaxewKi",
+    "trustline_objects": 8,
+    "discovered_currencies": 1
+  },
+  {
+    "issuer": "rLqUC2eCPohYvJCEBJ77eCCqVL2uEiczjA",
+    "trustline_objects": 8,
+    "discovered_currencies": 1
+  },
+  {
+    "issuer": "rXTKdHWuppSjkbiKoEv53bfxHAn1MxmTb",
+    "trustline_objects": 8,
+    "discovered_currencies": 1
+  },
+  {
+    "issuer": "rGG3wQ4kUzd7Jnmk1n5NWPZjjut62kCBfC",
+    "trustline_objects": 7,
+    "discovered_currencies": 1
+  }
+]

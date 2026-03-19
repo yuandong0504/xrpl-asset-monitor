@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Internet of Value — Network Map v3</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap');
+
+:root {
+–bg: #06070e;
+–neutral: #00e5ff;
+–dollar: #3b82f6;
+–protocol: #a855f7;
+–building: #f59e0b;
+–signal: #ef4444;
+–text: #cbd5e1;
+–muted: #64748b;
+}
+
+- { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+background: var(–bg);
+color: var(–text);
+font-family: ‘IBM Plex Mono’, monospace;
+min-height: 100vh;
+}
+
+.topbar {
+display: flex; justify-content: space-between; align-items: center;
+padding: 16px 32px; background: #080a12; border-bottom: 1px solid #0f172a;
+}
+.topbar-title { font-family: ‘IBM Plex Sans’, sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 1.5px; }
+.topbar-title span { color: var(–neutral); }
+
+.outer { display: grid; grid-template-columns: 1fr 160px; gap: 0; min-height: calc(100vh - 56px); }
+
+.stack-section { padding: 32px; }
+.stack { display: grid; gap: 8px; }
+.layer {
+display: grid; grid-template-columns: 130px 1fr; gap: 20px; align-items: center;
+padding: 16px 0; border-bottom: 1px solid #0d1117;
+}
+.layer:last-child { border-bottom: none; }
+.layer-tag { font-family: ‘IBM Plex Sans’, sans-serif; font-weight: 700; font-size: 13px; }
+.layer-4 .layer-tag { color: var(–protocol); }
+.layer-3 .layer-tag { color: var(–neutral); }
+.layer-2 .layer-tag { color: #94a3b8; }
+.layer-1 .layer-tag { color: #475569; }
+
+.flow-arrow {
+text-align: center; font-size: 22px; color: #334155;
+animation: flow 2.5s linear infinite;
+}
+@keyframes flow { 0%,100% { opacity: 0.4; transform: translateY(-4px); } 50% { opacity: 1; transform: translateY(4px); } }
+
+.chip {
+display: inline-flex; align-items: center; gap: 6px;
+padding: 7px 16px; border-radius: 9999px; font-size: 10.5px;
+cursor: pointer; transition: all 0.25s; border: 1px solid;
+margin: 3px;
+}
+.chip:hover { transform: scale(1.1); box-shadow: 0 0 15px currentColor; }
+.chip-protocol { border-color: rgba(168,85,247,0.5); color: #c084fc; background: rgba(168,85,247,0.08); }
+.chip-neutral { border-color: rgba(0,229,255,0.4); color: var(–neutral); background: rgba(0,229,255,0.06); }
+.chip-building { border-color: rgba(245,158,11,0.4); color: var(–building); background: rgba(245,158,11,0.06); border-style: dashed; }
+.chip-signal {
+border-color: var(–signal); color: #fca5a5; background: rgba(239,68,68,0.08);
+animation: pulse 1.8s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { box-shadow: 0 0 8px #ef4444; } 50% { box-shadow: 0 0 22px #ef4444; } }
+
+.boards { display: grid; grid-template-columns: 1fr 44px 1fr; gap: 24px; padding: 0 32px 20px; }
+.board {
+border: 1px solid rgba(255,255,255,0.1); padding: 22px; border-radius: 16px;
+background: rgba(15,23,42,0.6);
+}
+.board-dollar { border-color: rgba(59,130,246,0.35); }
+.board-neutral { border-color: rgba(0,229,255,0.35); }
+.board-title { font-family: ‘IBM Plex Sans’, sans-serif; font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+.board-dollar .board-title { color: var(–dollar); }
+.board-neutral .board-title { color: var(–neutral); }
+
+.signal-bar {
+margin: 0 32px 20px; padding: 16px 20px; border: 1px dashed #ef4444;
+background: rgba(239,68,68,0.06); border-radius: 12px;
+display: flex; align-items: flex-start; gap: 14px; font-size: 11px; line-height: 1.5;
+}
+
+.timeline {
+padding: 32px 20px; border-left: 1px solid #0d1117; background: #080a12;
+}
+.tl-item { padding: 12px 0; display: flex; gap: 12px; font-size: 11px; line-height: 1.6; }
+
+.modal {
+position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+background: rgba(0,0,0,0.9); display: none; align-items: center; justify-content: center; z-index: 9999;
+}
+.modal-content {
+background: #0f172a; padding: 28px; border-radius: 16px; max-width: 380px;
+border: 1px solid #334155; color: #e2e8f0;
+}
+
+.bottombar {
+padding: 10px 32px; border-top: 1px solid #0d1117; background: #080a12;
+display: flex; justify-content: space-between; font-size: 9px; color: var(–muted);
+}
+</style>
+
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-title">Internet of <span>Value</span> — Network Map <span style="font-size:11px;color:#64748b;">v3</span></div>
+  <div style="font-size:11px;color:#64748b;">MAR 2026 • @QuantForXRP</div>
+</div>
+
+<div class="outer">
+
+  <div>
+    <!-- 四层协议栈 -->
+    <div class="stack-section">
+      <div style="font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;">Protocol Stack — Four Layers</div>
+      <div class="stack">
+
+```
+    <div class="layer layer-4">
+      <div class="layer-tag">L4 Routing</div>
+      <div>
+        <span class="chip chip-protocol" data-key="ilp">ILP — Interledger Protocol</span>
+        <span style="font-size:9px;color:#334155;margin-left:8px;">The TCP/IP of value · 2016 IETF · neutral · open</span>
+      </div>
+    </div>
+
+    <div class="flow-arrow">↓</div>
+
+    <div class="layer layer-3">
+      <div class="layer-tag">L3 Settlement</div>
+      <div>
+        <span class="chip chip-neutral" data-key="xrpl">XRPL</span>
+        <span class="chip chip-neutral" data-key="xrp">XRP</span>
+        <span class="chip chip-signal" data-key="prime">Ripple Prime ⚡</span>
+        <span class="chip chip-building" data-key="rlusd">RLUSD</span>
+        <span style="font-size:9px;color:#334155;margin-left:4px;">← Empty. XRP is candidate. Not yet confirmed.</span>
+      </div>
+    </div>
+
+    <div class="flow-arrow">↓</div>
+
+    <div class="layer layer-2">
+      <div class="layer-tag">L2 Transport</div>
+      <div>
+        <span class="chip chip-neutral" data-key="ccip">Chainlink CCIP</span>
+        <span class="chip chip-neutral" data-key="wormhole">Wormhole</span>
+        <span class="chip chip-building" data-key="connectors">ILP connectors</span>
+      </div>
+    </div>
+
+    <div class="flow-arrow">↓</div>
+
+    <div class="layer layer-1">
+      <div class="layer-tag">L1 Assets</div>
+      <div>
+        <span class="chip chip-building" style="font-size:9px;" data-key="assets">USDC · RLUSD · Tokenized RWA · CBDC · Deposits · Bonds</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 分隔 -->
+<div style="text-align:center;font-size:9px;color:var(--muted);letter-spacing:2px;margin:8px 0 16px;">TWO BOARDS — SAME GAME</div>
+
+<!-- 两块棋盘 -->
+<div class="boards">
+
+  <div class="board board-dollar">
+    <div class="board-title">Board 1 — Dollar System</div>
+    <div style="font-size:9px;color:#64748b;margin-bottom:14px;">Winning the existing financial world</div>
+    <div>
+      <span class="chip" style="background:rgba(59,130,246,0.08);border-color:rgba(59,130,246,0.4);color:#93c5fd;" data-key="usdc">Circle / USDC $80B</span>
+      <span class="chip" style="background:rgba(59,130,246,0.08);border-color:rgba(59,130,246,0.4);color:#93c5fd;" data-key="coinbase">Coinbase</span>
+      <span class="chip" style="background:rgba(59,130,246,0.08);border-color:rgba(59,130,246,0.4);color:#93c5fd;" data-key="visa">Visa / Mastercard</span>
+      <span class="chip" style="background:rgba(59,130,246,0.08);border-color:rgba(59,130,246,0.4);color:#93c5fd;" data-key="swift">SWIFT upgrade</span>
+      <span class="chip" style="background:rgba(59,130,246,0.08);border-color:rgba(59,130,246,0.4);color:#93c5fd;" data-key="axelar">Axelar (Circle)</span>
+      <span class="chip" style="background:rgba(59,130,246,0.08);border-color:rgba(59,130,246,0.4);color:#93c5fd;" data-key="jpmorgan">JPMorgan</span>
+      <span class="chip" style="background:rgba(59,130,246,0.08);border-color:rgba(59,130,246,0.4);color:#93c5fd;" data-key="mbridge">mBridge $55B+</span>
+    </div>
+    <div style="margin-top:14px;padding-top:10px;border-top:1px solid #0d1117;font-size:9px;color:#334155;line-height:1.7;">
+      Moat = dollar backing + compliance.<br>
+      Ceiling = dollar backing. Cannot serve neutral corridors.
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#334155;font-size:13px;font-weight:700;letter-spacing:2px;">VS</div>
+
+  <div class="board board-neutral">
+    <div class="board-title">Board 2 — Neutral System</div>
+    <div style="font-size:9px;color:#64748b;margin-bottom:14px;">Winning the world dollar can't serve</div>
+    <div>
+      <span class="chip chip-neutral" data-key="ilp2">ILP</span>
+      <span class="chip chip-neutral" data-key="xrpl2">XRPL</span>
+      <span class="chip chip-neutral" data-key="xrp2">XRP</span>
+      <span class="chip chip-signal" data-key="prime2">Ripple Prime ⚡</span>
+      <span class="chip chip-neutral" data-key="mojaloop">Mojaloop</span>
+      <span class="chip chip-neutral" data-key="sbi">SBI Group</span>
+      <span class="chip chip-neutral" data-key="socgen">Société Générale</span>
+      <span class="chip chip-building" data-key="cbdc">CBDC (neutral)</span>
+      <span class="chip chip-building" data-key="evernorth">Evernorth</span>
+      <span class="chip chip-building" data-key="sme">SME lending</span>
+    </div>
+    <div style="margin-top:14px;padding-top:10px;border-top:1px solid #0d1117;font-size:9px;color:#334155;line-height:1.7;">
+      Moat = neutrality. No issuer risk. No dollar dependency.<br>
+      Iran won't use USDC. ASEAN won't build on US stablecoin.
+    </div>
+  </div>
+
+</div>
+
+<!-- 关键信号栏 -->
+<div class="signal-bar">
+  <span style="font-size:20px;flex-shrink:0;">⚡</span>
+  <div>
+    <strong>The one signal that matters:</strong> Has Ripple Prime begun routing real institutional post-trade flow through XRPL?<br>
+    Not pilot. Not press release. Real money.<br>
+    <strong style="color:#ef4444;">March 2026: NOT CROSSED.</strong>
+  </div>
+</div>
+```
+
+  </div>
+
+  <!-- 时间轴 -->
+
+  <div class="timeline">
+    <div style="font-size:9px;color:var(--muted);letter-spacing:2px;margin-bottom:20px;text-transform:uppercase;">Internet Stage</div>
+
+```
+<div class="tl-item" style="color:#334155;">
+  <span>1983</span><span>TCP/IP born</span>
+</div>
+
+<div class="tl-item" style="background:rgba(0,229,255,0.08);padding:10px;border-radius:8px;border:1px solid rgba(0,229,255,0.2);color:var(--neutral);">
+  <span>▶ 1987</span><strong>First nodes live.<br>We are here.</strong>
+</div>
+
+<div class="tl-item" style="color:#334155;">
+  <span>1991</span><span>WWW · commercial</span>
+</div>
+
+<div class="tl-item" style="color:#334155;">
+  <span>1995</span><span>Netscape · tipping</span>
+</div>
+
+<div class="tl-item" style="color:#334155;">
+  <span>1999</span><span>Mass adoption</span>
+</div>
+
+<div style="margin-top:auto;padding-top:24px;border-top:1px solid #0d1117;font-size:9px;color:#1e293b;line-height:1.9;">
+  ILP = 2014<br>
+  XRPL = 2012<br>
+  NSCC = Mar 2026
+</div>
+```
+
+  </div>
+
+</div>
+
+<div class="bottombar">
+  <span>Structural analysis only · Not financial advice</span>
+  <span>@QuantForXRP · Open Research Series · Mar 2026</span>
+</div>
+
+<!-- 点击弹窗 -->
+
+<div class="modal" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal-content" id="modal-content" onclick="event.stopImmediatePropagation()"></div>
+</div>
+
+<script>
+const nodeData = {
+  ilp: { title: "ILP — Interledger Protocol", status: "Active · Protocol Layer", desc: "价值互联网的 TCP/IP。路由层核心协议，2014年设计，2016年IETF草案，和TCP/IP同一个标准化机构。开放、中立、不管底层用什么货币或网络。" },
+  ilp2: { title: "ILP — Interledger Protocol", status: "Active · Protocol Layer", desc: "价值互联网的 TCP/IP。路由层核心协议，2014年设计，2016年IETF草案，和TCP/IP同一个标准化机构。开放、中立、不管底层用什么货币或网络。" },
+  xrpl: { title: "XRP Ledger", status: "Active · Settlement Layer", desc: "结算层首选节点。13年运行零中断，3-5秒终结，费用低且可预测。$2.3B代币化RWA，原生DEX，借贷协议即将上线。" },
+  xrpl2: { title: "XRP Ledger", status: "Active · Settlement Layer", desc: "结算层首选节点。13年运行零中断，3-5秒终结，费用低且可预测。$2.3B代币化RWA，原生DEX，借贷协议即将上线。" },
+  xrp: { title: "XRP", status: "Active · Bridge Asset", desc: "中立桥接资产。无发行方，无美元依赖。在结算中闪现3-5秒然后消失。Ripple Prime CEO已确认将XRP用作机构交易的抵押品。" },
+  xrp2: { title: "XRP", status: "Active · Bridge Asset", desc: "中立桥接资产。无发行方，无美元依赖。在结算中闪现3-5秒然后消失。Ripple Prime CEO已确认将XRP用作机构交易的抵押品。" },
+  prime: { title: "⚡ Ripple Prime", status: "CRITICAL SIGNAL NODE · Building", desc: "前身Hidden Road，$12.5亿收购，年清算$3万亿，300+机构客户。2026年3月2日进入DTCC NSCC目录。承诺年底前将交易后流量迁移到XRPL。这条线跨过去的那一天，整个论点翻盘。" },
+  prime2: { title: "⚡ Ripple Prime", status: "CRITICAL SIGNAL NODE · Building", desc: "前身Hidden Road，$12.5亿收购，年清算$3万亿，300+机构客户。2026年3月2日进入DTCC NSCC目录。承诺年底前将交易后流量迁移到XRPL。这条线跨过去的那一天，整个论点翻盘。" },
+  rlusd: { title: "RLUSD", status: "Building · Stable Value Layer", desc: "Ripple的美元稳定币，$1.5B市值。目前18%在XRPL，82%在以太坊。OCC国家信托银行牌照已获有条件批准。与XRP互补——RLUSD管稳定价值，XRP管中立流动。" },
+  ccip: { title: "Chainlink CCIP", status: "Active · Transport Layer", desc: "跨链互操作协议，目前主导L2传输层。与DTCC合作Smart NAV项目，参与方包括JPMorgan、BNY Mellon等。" },
+  wormhole: { title: "Wormhole", status: "Active · Transport Layer", desc: "跨链消息传递协议。Ripple用Wormhole的NTT技术将RLUSD原生部署到以太坊L2网络（Optimism、Base等）。" },
+  connectors: { title: "ILP Connectors", status: "Building", desc: "ILP网络的路由节点。连接器之间竞争微小手续费，ILP自动找最优路径。Ripple Prime入驻NSCC后有望成为第一个华尔街级ILP连接器。" },
+  assets: { title: "Layer 1 — Assets", status: "Active · Foundation", desc: "价值网络的原材料层：法币存款、稳定币（USDC/RLUSD）、代币化真实资产（RWA）、各国CBDC、债券等。这一层节点越多，上层网络价值越大。" },
+  usdc: { title: "Circle / USDC", status: "Active · Dollar Board", desc: "$80B+市值，美元数字化最成功的案例。收购Axelar获得跨链路由能力。护城河=合规+美元背书。天花板=美元背书（中立性受限）。" },
+  coinbase: { title: "Coinbase", status: "Active · Dollar Board", desc: "美国最大合规交易所，Circle的战略伙伴。机构入口天然，监管关系最完整。" },
+  visa: { title: "Visa / Mastercard", status: "Active · Dollar Board", desc: "传统支付网络正在向稳定币结算扩张。Mastercard与Ripple/Gemini合作测试RLUSD结算——同时出现在两块棋盘上。" },
+  swift: { title: "SWIFT upgrade", status: "Building · Dollar Board", desc: "SWIFT正在升级系统，探索区块链互操作。拥有11,500家银行网络。ILP最大的直接竞争对手之一。" },
+  axelar: { title: "Axelar (Circle)", status: "Active · Dollar Board", desc: "Circle以$$$收购Axelar，直接获得跨链路由能力。这是Circle对ILP潜在威胁最直接的战略回应。窗口正在关闭。" },
+  jpmorgan: { title: "JPMorgan", status: "Active · Dollar Board", desc: "Onyx链、JPM Coin、参与DTCC Smart NAV。传统金融最积极拥抱区块链的机构之一。目前在美元体系棋盘上。" },
+  mbridge: { title: "mBridge $55B+", status: "Active · Dollar Board", desc: "BIS主导的多央行数字货币桥接平台，已处理超过$550亿。中国、泰国、阿联酋、香港参与。ILP的直接竞争者。" },
+  mojaloop: { title: "Mojaloop", status: "Active · Neutral Board", desc: "盖茨基金会支持，基于ILP的支付网络。已在坦桑尼亚、乌干达、卢旺达、菲律宾运行。Orange合作可覆盖22个非洲国家1亿用户。" },
+  sbi: { title: "SBI Group", status: "Active · Neutral Board", desc: "日本最大在线券商，长期Ripple合作伙伴。Q1 2026在日本推出RLUSD，活跃ODL通道，Evernorth$2亿锚定投资方。" },
+  socgen: { title: "Société Générale", status: "Active · Neutral Board", desc: "法国银行，在XRPL上原生发行欧元稳定币EUR CoinVertible（2026年2月）。第一家在XRPL上原生部署稳定币的大型欧洲银行。" },
+  cbdc: { title: "CBDC (neutral)", status: "Building · Largest Untapped Layer", desc: "最大的潜在节点层，目前还没有通用标准。如果XRPL成为中立的CBDC互通层，这是改变一切的变量。mBridge是主要竞争框架。" },
+  evernorth: { title: "Evernorth (XRPN)", status: "Building · Neutral Board", desc: "Nasdaq上市的XRP财资公司，持有4.731亿XRP。不是被动持有——将XRP存入XRPL借贷金库、提供流动性、运行AI代理金融。是XRPL网络的主动流动性引擎。" },
+  sme: { title: "SME Lending", status: "Building · Future Layer", desc: "XRPL原生借贷协议（XLS-66d）2026年1月28日进入验证者投票。激活后：固定期限贷款、链上信用历史、IOU发行。这是大众采用层的基础。" }
+};
+
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', (e) => {
+    const key = chip.getAttribute('data-key');
+    const data = nodeData[key];
+    if (!data) return;
+
+    const statusColor = key.includes('prime') ? '#ef4444' : key.includes('building') || ['rlusd','connectors','cbdc','evernorth','sme'].includes(key) ? '#f59e0b' : '#00e5ff';
+
+    document.getElementById('modal-content').innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+        <h3 style="color:#00e5ff;font-family:'IBM Plex Sans',sans-serif;font-size:15px;font-weight:700;">${data.title}</h3>
+        <button onclick="closeModal()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;line-height:1;">×</button>
+      </div>
+      <div style="display:inline-block;padding:3px 10px;border-radius:9999px;border:1px solid ${statusColor};color:${statusColor};font-size:9px;letter-spacing:1px;margin-bottom:14px;">${data.status}</div>
+      <p style="line-height:1.7;font-size:12px;color:#94a3b8;">${data.desc}</p>
+    `;
+    document.getElementById('modal').style.display = 'flex';
+    e.stopPropagation();
+  });
+});
+
+function closeModal() {
+  document.getElementById('modal').style.display = 'none';
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeModal();
+});
+</script>
+
+</body>
+</html>
